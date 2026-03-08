@@ -43,3 +43,51 @@ class RiskEventListResponse(BaseModel):
 
     events: list[RiskEventResponse]
     total: int
+
+
+class RiskLimitStatus(BaseModel):
+    """Status of a single risk limit."""
+
+    name: str
+    current_value: Decimal
+    limit_value: Decimal
+    percentage_used: float
+    status: str  # "OK", "WARNING", "CRITICAL"
+    message: str
+
+
+class RiskMonitoringDashboard(BaseModel):
+    """Comprehensive risk monitoring dashboard for live trading."""
+
+    timestamp: datetime
+    trading_mode: str  # PAPER or LIVE
+    kill_switch_active: bool
+    checks_enabled: bool
+
+    # Risk Limits
+    daily_loss: Decimal
+    daily_loss_limit: Decimal
+    daily_loss_status: str
+
+    gross_exposure: Decimal
+    max_exposure: Decimal
+    exposure_status: str
+
+    open_positions_count: int
+    max_open_orders: int
+    positions_status: str
+
+    # Performance Metrics
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate: float  # percentage
+
+    # Risk Breakdown
+    limit_statuses: list[RiskLimitStatus]
+    recent_risk_events: list[RiskEventResponse]
+
+    # Health Checks
+    exchange_healthy: bool
+    database_responsive: bool
+    price_data_stale: bool
