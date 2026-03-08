@@ -1,6 +1,7 @@
 """Risk event SQLAlchemy model."""
 
 from datetime import datetime
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import DateTime, Index, String, ForeignKey
@@ -13,7 +14,7 @@ from app.models.base import Base
 class RiskEvent(Base):
     __tablename__ = "risk_events"
 
-    order_id: Mapped[uuid4 | None] = mapped_column(
+    order_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True
     )
     check_name: Mapped[str] = mapped_column(String(64), nullable=False)

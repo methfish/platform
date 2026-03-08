@@ -10,6 +10,7 @@ Tables:
 
 from __future__ import annotations
 
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, Text
@@ -75,7 +76,7 @@ class SkillInvocation(Base):
 
     __tablename__ = "skill_invocations"
 
-    agent_run_id: Mapped[uuid4 | None] = mapped_column(
+    agent_run_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True
     )
     skill_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -109,7 +110,7 @@ class LearnedLesson(Base):
 
     __tablename__ = "learned_lessons"
 
-    agent_run_id: Mapped[uuid4 | None] = mapped_column(
+    agent_run_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True
     )
     category: Mapped[str] = mapped_column(String(64), nullable=False)
