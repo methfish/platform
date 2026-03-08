@@ -8,6 +8,7 @@ records of partial or full executions.
 
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -32,7 +33,7 @@ class Order(Base):
     exchange_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     # References
-    strategy_id: Mapped[uuid4 | None] = mapped_column(
+    strategy_id: Mapped[PyUUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("strategies.id"), nullable=True
     )
 
