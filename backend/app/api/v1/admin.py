@@ -23,16 +23,18 @@ from app.api.schemas.admin import (
     AuditLogListResponse,
     AuditLogResponse,
     LiveModeConfirmRequest,
+    SwitchExchangeRequest,
+    SwitchExchangeResponse,
     SystemStatusResponse,
     TradingModeResponse,
 )
 from app.auth.jwt import get_current_user
 from app.auth.permissions import require_role
 from app.config import Settings, get_settings
-from app.core.enums import TradingMode, UserRole
+from app.core.enums import ExchangeName, TradingMode, UserRole
 from app.core.exceptions import PensyError, TradingModeError
 from app.db.session import get_session
-from app.dependencies import TradingState, get_trading_state, is_live_trading_active
+from app.dependencies import TradingState, get_trading_state, is_live_trading_active, set_exchange_adapter
 from app.models.audit import AuditLog
 from app.models.user import User
 
@@ -233,4 +235,82 @@ async def list_audit_logs(
     return AuditLogListResponse(
         logs=[AuditLogResponse.model_validate(log) for log in logs],
         total=total,
+    )
+
+
+EXCHANGE_NAME_MAP = {
+    "binance_spot": ExchangeName.BINANCE_SPOT,
+    "binance_futures": ExchangeName.BINANCE_FUTURES,
+    "paper": ExchangeName.PAPER,
+}
+
+
+@router.post(
+    "/admin/switch-exchange",
+    response_model=SwitchExchangeResponse,
+    summary="Switch the active exchange adapter at runtime",
+)
+async def switch_exchange(
+    body: SwitchExchangeRequest,
+    current_user: User = Depends(require_role(UserRole.OPERATOR)),
+    settings: Settings = Depends(get_settings),
+    state: TradingState = Depends(get_trading_state),
+) -> SwitchExchangeResponse:
+    """
+    Hot-swap the exchange adapter. Requires OPERATOR role.
+
+    For live exchanges (non-paper), LIVE_TRADING_ENABLED must be true
+    and the operator must have confirmed live mode first.
+
+    Steps: disconnect old adapter → create new adapter → connect → set global.
+    """
+    if body.confirmation_phrase != "I CONFIRM EXCHANGE SWITCH":
+        raise TradingModeError(
+            "Confirmation phrase must be exactly 'I CONFIRM EXCHANGE SWITCH'"
+        )
+
+    exchange_enum = EXCHANGE_NAME_MAP.get(body.exchange)
+    if exchange_enum is None:
+        raise PensyError(
+            f"Unknown exchange '{body.exchange}'. "
+            f"Valid options: {', '.join(EXCHANGE_NAME_MAP.keys())}"
+        )
+
+    # Safety: switching to a live exchange requires live trading to be active
+    is_live = exchange_enum not in (ExchangeName.PAPER,)
+    if is_live and not is_live_trading_active(settings, state):
+        raise TradingModeError(
+            "Cannot switch to a live exchange without enabling and confirming live trading first. "
+            "Set LIVE_TRADING_ENABLED=true and call POST /admin/live-mode-confirm."
+        )
+
+    trading_mode = TradingMode.LIVE if is_live else TradingMode.PAPER
+
+    # Disconnect old adapter
+    from app.dependencies import get_exchange_adapter
+    try:
+        old_adapter = get_exchange_adapter()
+        await old_adapter.disconnect()
+        logger.info("Disconnected old adapter: %s", old_adapter.exchange_name)
+    except RuntimeError:
+        pass  # No adapter was initialized
+
+    # Create and connect new adapter
+    from app.exchange.factory import create_exchange_adapter
+    new_adapter = create_exchange_adapter(exchange_enum, settings, trading_mode)
+    await new_adapter.connect()
+    set_exchange_adapter(new_adapter)
+
+    logger.warning(
+        "Exchange switched to %s by operator %s",
+        new_adapter.exchange_name,
+        current_user.username,
+    )
+
+    return SwitchExchangeResponse(
+        success=True,
+        exchange_name=new_adapter.exchange_name,
+        is_paper=new_adapter.is_paper,
+        is_connected=new_adapter.is_connected,
+        message=f"Switched to {new_adapter.exchange_name} successfully",
     )

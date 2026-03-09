@@ -16,11 +16,11 @@ import {
 export default function OrderForm() {
   const createOrder = useCreateOrder();
 
-  const [assetClass, setAssetClass] = useState<AssetClass>('crypto');
+  const [assetClass, setAssetClass] = useState<AssetClass>('forex');
 
   const [form, setForm] = useState({
-    exchange: EXCHANGE_FOR_CLASS['crypto'],
-    symbol: SYMBOLS_BY_CLASS['crypto'][0].symbol,
+    exchange: EXCHANGE_FOR_CLASS['forex'],
+    symbol: SYMBOLS_BY_CLASS['forex'][0].symbol,
     side: 'buy' as OrderSide,
     type: 'market' as OrderType,
     quantity: '',
@@ -71,19 +71,15 @@ export default function OrderForm() {
     if (!validate()) return;
 
     const order: OrderCreateRequest = {
-      exchange: form.exchange,
       symbol: form.symbol,
       side: form.side,
-      type: form.type,
+      order_type: form.type,
       quantity: parseFloat(form.quantity),
       time_in_force: form.time_in_force,
     };
 
     if (form.type === 'limit' || form.type === 'stop_limit') {
       order.price = parseFloat(form.price);
-    }
-    if (form.type === 'stop' || form.type === 'stop_limit') {
-      order.stop_price = parseFloat(form.stop_price);
     }
 
     createOrder.mutate(order, {

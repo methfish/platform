@@ -11,11 +11,10 @@ GET  /fills               - List recent order fills.
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
 from typing import Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +26,18 @@ from app.api.schemas.orders import (
 )
 from app.auth.jwt import get_current_user
 from app.config import Settings, get_settings
-from app.core.enums import OrderStatus, TradingMode
-from app.core.exceptions import OrderNotFound, PensyError
+from app.core.enums import OrderSide, OrderStatus, OrderType, TimeInForce, TradingMode
+from app.core.exceptions import OrderNotFound, PensyError, RiskCheckFailed
 from app.db.session import get_session
-from app.dependencies import TradingState, get_exchange_adapter, get_trading_state, is_live_trading_active
+from app.dependencies import (
+    TradingState,
+    get_oms_service,
+    get_trading_state,
+    is_live_trading_active,
+)
 from app.models.order import Order, OrderFill
 from app.models.user import User
+from app.oms.service import OrderManagementService
 
 logger = logging.getLogger("pensy.api.orders")
 
@@ -90,50 +95,47 @@ async def create_order(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
     state: TradingState = Depends(get_trading_state),
+    oms: OrderManagementService = Depends(get_oms_service),
 ) -> OrderResponse:
     """
-    Create and submit a new order.
+    Create and submit a new order through the full OMS pipeline.
 
-    The order is first persisted in PENDING state, then (in a full
-    implementation) forwarded to the OMS pipeline for risk checks and
-    exchange submission. This scaffold persists the order and returns it.
+    The order goes through: validation -> risk checks -> exchange submission.
     """
-    mode = TradingMode.LIVE if is_live_trading_active(settings, state) else TradingMode.PAPER
-
-    order = Order(
-        client_order_id=f"pensy-{uuid4().hex[:16]}",
-        exchange="paper" if mode == TradingMode.PAPER else "binance_spot",
-        symbol=body.symbol.upper(),
-        side=body.side.value,
-        order_type=body.order_type.value,
-        quantity=body.quantity,
-        price=body.price,
-        time_in_force=body.time_in_force.value,
-        status=OrderStatus.PENDING.value,
-        trading_mode=mode.value,
-        filled_quantity=Decimal("0"),
-        strategy_id=body.strategy_id,
-    )
-
-    session.add(order)
-    await session.flush()
-    await session.refresh(order)
-
     logger.info(
-        "Order %s created by %s: %s %s %s qty=%s price=%s mode=%s",
-        order.client_order_id,
+        "Order request from %s: %s %s %s qty=%s price=%s",
         current_user.username,
-        order.symbol,
-        order.side,
-        order.order_type,
-        order.quantity,
-        order.price,
-        order.trading_mode,
+        body.symbol,
+        body.side.value,
+        body.order_type.value,
+        body.quantity,
+        body.price,
     )
 
-    # TODO: Forward to OMS service for risk check + exchange submission
-    # await oms_service.submit(order)
+    try:
+        order = await oms.submit_order(
+            symbol=body.symbol.upper(),
+            side=OrderSide(body.side.value),
+            order_type=OrderType(body.order_type.value),
+            quantity=body.quantity,
+            price=body.price,
+            strategy_id=body.strategy_id,
+            time_in_force=TimeInForce(body.time_in_force.value),
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+    except RiskCheckFailed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": "Order rejected by risk checks", "checks": exc.failures},
+        )
 
+    # Refresh to trigger selectin loading of fills relationship
+    await session.refresh(order)
     return OrderResponse.model_validate(order)
 
 
@@ -166,38 +168,29 @@ async def cancel_order(
     order_id: UUID,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    oms: OrderManagementService = Depends(get_oms_service),
 ) -> OrderResponse:
     """
     Request cancellation of an active order.
 
-    Sets the order status to CANCEL_PENDING. The actual cancellation on
-    the exchange is handled asynchronously by the OMS.
+    Forwards the cancel request to the OMS, which handles the exchange
+    cancellation and state transitions.
     """
-    result = await session.execute(select(Order).where(Order.id == order_id))
-    order = result.scalar_one_or_none()
-
-    if order is None:
-        raise OrderNotFound(str(order_id))
-
-    order_status = OrderStatus(order.status)
-    if order_status.is_terminal:
-        raise PensyError(
-            f"Cannot cancel order in terminal state: {order.status}",
-            code="INVALID_ORDER_STATE",
-        )
-
-    order.status = OrderStatus.CANCEL_PENDING.value
-    await session.flush()
-    await session.refresh(order)
-
     logger.info(
         "Cancel requested for order %s by %s",
-        order.client_order_id,
+        order_id,
         current_user.username,
     )
 
-    # TODO: Forward cancel to OMS/exchange adapter
-    # await oms_service.cancel(order)
+    try:
+        order = await oms.cancel_order(order_id=order_id, session=session)
+    except OrderNotFound:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
 
     return OrderResponse.model_validate(order)
 

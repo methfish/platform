@@ -13,20 +13,22 @@ export type TimeInForce = 'gtc' | 'ioc' | 'fok' | 'day';
 export interface Order {
   id: string;
   client_order_id: string;
-  exchange: string;
+  exchange_order_id: string | null;
   symbol: string;
-  side: OrderSide;
-  type: OrderType;
-  status: OrderStatus;
+  side: string;
+  order_type: string;
+  status: string;
   quantity: number;
   filled_quantity: number;
   price: number | null;
-  average_fill_price: number | null;
-  stop_price: number | null;
-  time_in_force: TimeInForce;
+  avg_fill_price: number | null;
+  reject_reason: string | null;
+  trading_mode: string;
+  time_in_force: string;
   strategy_id: string | null;
   created_at: string;
   updated_at: string;
+  fills: Fill[];
 }
 
 export interface OrdersResponse {
@@ -35,30 +37,19 @@ export interface OrdersResponse {
 }
 
 export interface OrderCreateRequest {
-  exchange: string;
   symbol: string;
   side: OrderSide;
-  type: OrderType;
+  order_type: OrderType;
   quantity: number;
   price?: number;
-  stop_price?: number;
   time_in_force?: TimeInForce;
 }
 
 export interface Fill {
   id: string;
   order_id: string;
-  exchange: string;
-  symbol: string;
-  side: OrderSide;
-  price: number;
   quantity: number;
-  fee: number;
-  fee_currency: string;
-  timestamp: string;
-}
-
-export interface FillsResponse {
-  fills: Fill[];
-  total: number;
+  price: number;
+  commission: number;
+  fill_time: string;
 }

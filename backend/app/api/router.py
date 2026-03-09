@@ -18,6 +18,7 @@ from app.api.v1 import (
     admin,
     agents,
     auth,
+    chat,
     market_data,
     markets,
     orders,
@@ -91,6 +92,11 @@ api_router.include_router(
 
 api_router.include_router(
     research.router,
+    prefix="/api/v1",
+)
+
+api_router.include_router(
+    chat.router,
     prefix="/api/v1",
 )
 

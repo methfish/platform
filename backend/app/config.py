@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     AGENT_MAX_PIPELINE_TIME_SECONDS: float = 120.0
     AGENT_ENABLE_MODEL_ASSISTED: bool = True
     LLM_API_KEY: SecretStr = SecretStr("")
-    LLM_MODEL_NAME: str = "claude-sonnet-4-20250514"
+    LLM_MODEL_NAME: str = "claude-haiku-4-5-20251001"
 
     # --- Alert Webhooks ---
     SLACK_WEBHOOK_URL: Optional[str] = None

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  ShoppingCart,
+  ClipboardList,
   BarChart3,
   Brain,
   ShieldAlert,
@@ -12,14 +12,16 @@ import {
   Activity,
   FlaskConical,
   Zap,
+  MessageCircle,
 } from 'lucide-react';
 import { useAppStore } from '../../store';
 
 const navItems = [
   { path: '/', label: 'Research Lab', icon: LayoutDashboard },
-  { path: '/research', label: 'Backtests', icon: FlaskConical },
+  { path: '/chat', label: 'AI Chat', icon: MessageCircle },
+  { path: '/backtests', label: 'Backtests', icon: FlaskConical },
   { path: '/strategies', label: 'Strategies', icon: Zap },
-  { path: '/orders', label: 'Orders', icon: ShoppingCart },
+  { path: '/orders', label: 'Order History', icon: ClipboardList },
   { path: '/positions', label: 'Positions', icon: BarChart3 },
   { path: '/risk', label: 'Risk', icon: ShieldAlert },
   { path: '/agents', label: 'Agents', icon: Bot },

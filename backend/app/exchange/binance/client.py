@@ -79,6 +79,9 @@ class BinanceRestClient:
             elif method == "POST":
                 async with session.post(url, params=params, headers=headers) as resp:
                     return await self._handle_response(resp)
+            elif method == "PUT":
+                async with session.put(url, params=params, headers=headers) as resp:
+                    return await self._handle_response(resp)
             elif method == "DELETE":
                 async with session.delete(url, params=params, headers=headers) as resp:
                     return await self._handle_response(resp)
@@ -177,6 +180,21 @@ class BinanceRestClient:
         elif client_order_id:
             params["origClientOrderId"] = client_order_id
         return await self._request("DELETE", "/api/v3/order", params, signed=True)
+
+    # --- User Data Stream (Listen Key) ---
+
+    async def create_listen_key(self) -> str:
+        """Create a new listen key for user data stream. Valid for 60 minutes."""
+        data = await self._request("POST", "/api/v3/userDataStream")
+        return data["listenKey"]
+
+    async def renew_listen_key(self, listen_key: str) -> None:
+        """Keep-alive a listen key. Must be called every 30 minutes."""
+        await self._request("PUT", "/api/v3/userDataStream", {"listenKey": listen_key})
+
+    async def close_listen_key(self, listen_key: str) -> None:
+        """Close/invalidate a listen key."""
+        await self._request("DELETE", "/api/v3/userDataStream", {"listenKey": listen_key})
 
     # --- Raw-response endpoints (list or dict) ---
 

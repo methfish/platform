@@ -20,7 +20,15 @@ from app.config import get_settings
 from app.core.enums import ExchangeName, TradingMode
 from app.db.session import close_db, init_db, init_db_async
 from app.market_data.seeder import seed_simulated_tickers
-from app.dependencies import get_trading_state, set_exchange_adapter, set_mm_arb_runner
+from app.dependencies import (
+    get_trading_state,
+    set_exchange_adapter,
+    set_fill_handler,
+    set_mm_arb_runner,
+    set_oms_service,
+    set_position_tracker,
+    set_risk_engine,
+)
 from app.exchange.factory import create_exchange_adapter
 from app.observability.logging import setup_logging
 
@@ -69,20 +77,58 @@ async def lifespan(app: FastAPI):
 
     # Seed simulated market data for forex and stocks
     await seed_simulated_tickers()
+
+    # Also seed prices into paper adapter's in-memory book for order fills
+    if hasattr(adapter, '_book'):
+        from app.market_data.seeder import FOREX_SYMBOLS, STOCK_SYMBOLS
+        from decimal import Decimal as D
+        for symbol, (bid, ask, last, _vol) in {**FOREX_SYMBOLS, **STOCK_SYMBOLS}.items():
+            adapter._book.update_price(symbol, D(bid), D(ask), D(last))
+        logger.info("Seeded %d prices into paper adapter", len(FOREX_SYMBOLS) + len(STOCK_SYMBOLS))
     logger.info("Simulated forex & stock tickers seeded")
 
-    # Initialize strategy runner (MM/Arb engine)
+    # Initialize core trading services
     from app.core.events import event_bus
     from app.oms.service import OrderManagementService
+    from app.oms.fill_handler import FillHandler
+    from app.position.tracker import PositionTracker
     from app.risk.engine import RiskEngine
 
-    risk_engine = RiskEngine()
+    # Risk engine with production checks
+    from app.risk.checks.kill_switch import KillSwitchCheck
+    from app.risk.checks.order_size import OrderSizeCheck
+    from app.risk.checks.position_limit import PositionLimitCheck
+    from app.risk.checks.daily_loss import DailyLossCheck
+
+    risk_engine = RiskEngine(checks=[
+        KillSwitchCheck(),       # Highest priority — blocks all if active
+        DailyLossCheck(),        # Circuit breaker on daily loss
+        OrderSizeCheck(),        # Per-order quantity/notional limit
+        PositionLimitCheck(),    # Resulting position notional limit
+    ])
+    set_risk_engine(risk_engine)
+    logger.info("Risk engine initialized with %d checks", len(risk_engine.checks))
+
+    # OMS service
     oms = OrderManagementService(
         exchange_adapter=adapter,
         risk_engine=risk_engine,
         event_bus=event_bus,
     )
+    set_oms_service(oms)
 
+    # Position tracker + fill handler
+    position_tracker = PositionTracker()
+    set_position_tracker(position_tracker)
+
+    fill_handler = FillHandler(
+        event_bus=event_bus,
+        position_tracker=position_tracker,
+    )
+    set_fill_handler(fill_handler)
+    logger.info("OMS, position tracker, and fill handler initialized")
+
+    # Strategy runner
     from app.strategy.mm_arb_runner import MMArbStrategyRunner
 
     mm_arb_runner = MMArbStrategyRunner(
@@ -92,6 +138,67 @@ async def lifespan(app: FastAPI):
     )
     set_mm_arb_runner(mm_arb_runner)
     logger.info("Strategy engine initialized (MM/Arb runner ready)")
+
+    # --- Background tasks ---
+    import asyncio
+    from app.db.session import async_session_factory as _session_factory
+
+    async def _fill_listener():
+        """Listen for exchange fill events and process through FillHandler."""
+        logger.info("Fill listener started")
+        try:
+            async for user_event in adapter.subscribe_user_data():
+                if user_event.event_type != "FILL":
+                    continue
+                try:
+                    async with _session_factory() as session:
+                        await fill_handler.process_fill_by_client_order_id(
+                            client_order_id=user_event.client_order_id,
+                            fill_quantity=user_event.filled_quantity,
+                            fill_price=user_event.fill_price,
+                            session=session,
+                            commission=user_event.commission,
+                            commission_asset=user_event.commission_asset or None,
+                            exchange_fill_id=user_event.exchange_order_id,
+                            fill_time=user_event.timestamp,
+                        )
+                        await session.commit()
+                        logger.debug(
+                            "Fill processed: %s qty=%s @ %s",
+                            user_event.client_order_id,
+                            user_event.filled_quantity,
+                            user_event.fill_price,
+                        )
+                except Exception:
+                    logger.exception("Error processing fill event: %s", user_event)
+        except asyncio.CancelledError:
+            logger.info("Fill listener stopped")
+        except Exception:
+            logger.exception("Fill listener crashed")
+
+    async def _mark_to_market_loop():
+        """Periodically update unrealized PnL for all open positions."""
+        logger.info("Mark-to-market loop started (interval=5s)")
+        try:
+            while True:
+                await asyncio.sleep(5)
+                try:
+                    async with _session_factory() as session:
+                        positions = await position_tracker.get_all_positions(session)
+                        for pos in positions:
+                            ticker = adapter._book.get_price(pos.symbol) if hasattr(adapter, '_book') else None
+                            if ticker and ticker.last > 0:
+                                position_tracker.update_unrealized_pnl(pos, ticker.last)
+                        if positions:
+                            await session.commit()
+                except Exception:
+                    logger.exception("Mark-to-market update failed")
+        except asyncio.CancelledError:
+            logger.info("Mark-to-market loop stopped")
+
+    # Start background tasks
+    fill_task = asyncio.create_task(_fill_listener(), name="fill_listener")
+    mtm_task = asyncio.create_task(_mark_to_market_loop(), name="mark_to_market")
 
     # Initialize Agent System
     from app.agents.skill_registry import SkillRegistry
@@ -159,6 +266,9 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down Pensy platform...")
+    fill_task.cancel()
+    mtm_task.cancel()
+    await asyncio.gather(fill_task, mtm_task, return_exceptions=True)
     await mm_arb_runner.stop_all()
     await adapter.disconnect()
     await close_db()

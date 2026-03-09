@@ -1,12 +1,11 @@
-import { OrderStatus } from '../../types/order';
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../utils/constants';
 
 interface OrderStatusBadgeProps {
-  status: OrderStatus;
+  status: string;
 }
 
 export default function OrderStatusBadge({ status }: OrderStatusBadgeProps) {
-  const colors = ORDER_STATUS_COLORS[status] ?? ORDER_STATUS_COLORS.pending;
+  const colors = ORDER_STATUS_COLORS[status] ?? ORDER_STATUS_COLORS.PENDING;
   const label = ORDER_STATUS_LABELS[status] ?? status;
 
   return (

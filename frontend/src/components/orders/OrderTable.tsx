@@ -54,10 +54,10 @@ export default function OrderTable({ orders, isLoading }: OrderTableProps) {
       },
     },
     {
-      key: 'type',
+      key: 'order_type',
       header: 'Type',
       sortable: true,
-      render: (row) => <span className="text-gray-400 capitalize">{row.type.replace('_', ' ')}</span>,
+      render: (row) => <span className="text-gray-400 capitalize">{row.order_type.replace('_', ' ').toLowerCase()}</span>,
     },
     {
       key: 'quantity',
@@ -75,17 +75,17 @@ export default function OrderTable({ orders, isLoading }: OrderTableProps) {
       sortable: true,
       render: (row) => (
         <span className="font-mono">
-          {row.price ? formatCurrency(row.price) : row.type === 'market' ? 'MKT' : '-'}
+          {row.price ? formatCurrency(row.price) : row.order_type === 'MARKET' ? 'MKT' : '-'}
         </span>
       ),
     },
     {
-      key: 'average_fill_price',
+      key: 'avg_fill_price',
       header: 'Avg Fill',
       sortable: true,
       render: (row) => (
         <span className="font-mono">
-          {row.average_fill_price ? formatCurrency(row.average_fill_price) : '-'}
+          {row.avg_fill_price ? formatCurrency(row.avg_fill_price) : '-'}
         </span>
       ),
     },
@@ -96,17 +96,17 @@ export default function OrderTable({ orders, isLoading }: OrderTableProps) {
       render: (row) => <OrderStatusBadge status={row.status} />,
     },
     {
-      key: 'exchange',
-      header: 'Exchange',
+      key: 'trading_mode',
+      header: 'Mode',
       sortable: true,
-      render: (row) => <span className="text-gray-500 capitalize text-xs">{row.exchange}</span>,
+      render: (row) => <span className="text-gray-500 text-xs">{row.trading_mode}</span>,
     },
     {
       key: 'actions',
       header: '',
       width: '60px',
       render: (row) =>
-        ['pending', 'open', 'partially_filled'].includes(row.status) ? (
+        ['PENDING', 'APPROVED', 'SUBMITTED', 'PARTIALLY_FILLED'].includes(row.status) ? (
           <button
             onClick={(e) => {
               e.stopPropagation();

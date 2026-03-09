@@ -73,6 +73,70 @@ def get_agent_registry() -> dict[str, Any]:
     return _agent_registry
 
 
+# --- OMS Service ---
+
+_oms_service: Any = None
+
+
+def set_oms_service(oms: Any) -> None:
+    global _oms_service
+    _oms_service = oms
+
+
+def get_oms_service() -> Any:
+    if _oms_service is None:
+        raise RuntimeError("OMS service not initialized")
+    return _oms_service
+
+
+# --- Risk Engine ---
+
+_risk_engine: Any = None
+
+
+def set_risk_engine(engine: Any) -> None:
+    global _risk_engine
+    _risk_engine = engine
+
+
+def get_risk_engine() -> Any:
+    if _risk_engine is None:
+        raise RuntimeError("Risk engine not initialized")
+    return _risk_engine
+
+
+# --- Position Tracker ---
+
+_position_tracker: Any = None
+
+
+def set_position_tracker(tracker: Any) -> None:
+    global _position_tracker
+    _position_tracker = tracker
+
+
+def get_position_tracker() -> Any:
+    if _position_tracker is None:
+        raise RuntimeError("Position tracker not initialized")
+    return _position_tracker
+
+
+# --- Fill Handler ---
+
+_fill_handler: Any = None
+
+
+def set_fill_handler(handler: Any) -> None:
+    global _fill_handler
+    _fill_handler = handler
+
+
+def get_fill_handler() -> Any:
+    if _fill_handler is None:
+        raise RuntimeError("Fill handler not initialized")
+    return _fill_handler
+
+
 def is_live_trading_active(
     settings: Settings | None = None,
     state: TradingState | None = None,

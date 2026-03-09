@@ -10,6 +10,7 @@ Test thoroughly on Binance testnet before enabling live trading.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import AsyncIterator, Optional
@@ -47,12 +48,17 @@ class BinanceSpotAdapter(ExchangeAdapter):
     Only use with LIVE_TRADING_ENABLED=true and proper safety controls.
     """
 
+    # Renew listen key every 25 minutes (expires at 60, Binance recommends 30)
+    LISTEN_KEY_RENEW_INTERVAL = 25 * 60
+
     def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
         self._auth = BinanceAuth(api_key, api_secret)
         self._client = BinanceRestClient(self._auth, testnet=testnet)
         self._ws_manager = BinanceWebSocketManager(testnet=testnet)
         self._connected = False
         self._testnet = testnet
+        self._listen_key: str | None = None
+        self._listen_key_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
         try:
@@ -66,6 +72,18 @@ class BinanceSpotAdapter(ExchangeAdapter):
             raise
 
     async def disconnect(self) -> None:
+        if self._listen_key_task and not self._listen_key_task.done():
+            self._listen_key_task.cancel()
+            try:
+                await self._listen_key_task
+            except asyncio.CancelledError:
+                pass
+        if self._listen_key:
+            try:
+                await self._client.close_listen_key(self._listen_key)
+            except Exception:
+                pass
+            self._listen_key = None
         await self._ws_manager.disconnect()
         await self._client.close()
         self._connected = False
@@ -204,14 +222,45 @@ class BinanceSpotAdapter(ExchangeAdapter):
             ticker = map_ticker(raw, exchange="binance_spot")
             yield ticker
 
+    async def _renew_listen_key_loop(self) -> None:
+        """Background task to renew the listen key before it expires."""
+        while True:
+            await asyncio.sleep(self.LISTEN_KEY_RENEW_INTERVAL)
+            if not self._listen_key:
+                break
+            try:
+                await self._client.renew_listen_key(self._listen_key)
+                logger.debug("Listen key renewed successfully")
+            except Exception as e:
+                logger.warning("Listen key renewal failed, creating new key: %s", e)
+                try:
+                    self._listen_key = await self._client.create_listen_key()
+                    logger.info("New listen key created after renewal failure")
+                except Exception as e2:
+                    logger.error("Failed to create new listen key: %s", e2)
+
     async def subscribe_user_data(self) -> AsyncIterator[UserDataEvent]:
-        # TODO: Implement listen key creation/renewal via REST API
-        # For now, this is a scaffold
-        listen_key = "placeholder"
-        async for raw in self._ws_manager.connect_user_data_stream(listen_key):
-            event = map_user_data_event(raw)
-            if event:
-                yield event
+        # Create listen key via REST API
+        self._listen_key = await self._client.create_listen_key()
+        logger.info("Listen key created for user data stream")
+
+        # Start background renewal task
+        self._listen_key_task = asyncio.create_task(
+            self._renew_listen_key_loop(), name="listen_key_renew"
+        )
+
+        try:
+            async for raw in self._ws_manager.connect_user_data_stream(self._listen_key):
+                event = map_user_data_event(raw)
+                if event:
+                    yield event
+        finally:
+            if self._listen_key_task and not self._listen_key_task.done():
+                self._listen_key_task.cancel()
+                try:
+                    await self._listen_key_task
+                except asyncio.CancelledError:
+                    pass
 
     @property
     def exchange_name(self) -> str:

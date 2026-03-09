@@ -10,6 +10,7 @@ import RiskPage from './pages/RiskPage';
 import AgentsPage from './pages/AgentsPage';
 import AdminPage from './pages/AdminPage';
 import ResearchPage from './pages/ResearchPage';
+import ChatPage from './pages/ChatPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
@@ -37,6 +38,8 @@ export default function App() {
         <Route path="positions" element={<PositionsPage />} />
         <Route path="strategies" element={<StrategiesPage />} />
         <Route path="risk" element={<RiskPage />} />
+        <Route path="backtests" element={<Navigate to="/research" replace />} />
+        <Route path="chat" element={<ChatPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="admin" element={<AdminPage />} />
       </Route>

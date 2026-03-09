@@ -30,6 +30,137 @@ import {
 } from '../api/research';
 import { formatCurrency, formatDate, pnlColor } from '../utils/formatters';
 
+// --- Demo Data ---
+
+const DEMO_BACKTESTS = [
+  { id: 'demo-1', strategy_type: 'sma_crossover', symbol: 'EURUSD', net_pnl: '1284.50', sharpe_ratio: '1.42', max_drawdown_pct: '3.8', win_rate: '0.56', total_trades: 87, is_trustworthy: true, created_at: '2026-02-15T10:30:00Z' },
+  { id: 'demo-2', strategy_type: 'rsi', symbol: 'AAPL', net_pnl: '2105.30', sharpe_ratio: '1.85', max_drawdown_pct: '4.2', win_rate: '0.62', total_trades: 54, is_trustworthy: true, created_at: '2026-02-18T14:00:00Z' },
+  { id: 'demo-3', strategy_type: 'bollinger', symbol: 'GBPUSD', net_pnl: '-432.10', sharpe_ratio: '0.38', max_drawdown_pct: '7.5', win_rate: '0.41', total_trades: 120, is_trustworthy: false, created_at: '2026-02-20T09:15:00Z' },
+  { id: 'demo-4', strategy_type: 'macd', symbol: 'MSFT', net_pnl: '876.20', sharpe_ratio: '1.12', max_drawdown_pct: '5.1', win_rate: '0.53', total_trades: 42, is_trustworthy: true, created_at: '2026-02-22T16:45:00Z' },
+  { id: 'demo-5', strategy_type: 'sma_crossover', symbol: 'SPY', net_pnl: '3210.80', sharpe_ratio: '2.05', max_drawdown_pct: '2.9', win_rate: '0.64', total_trades: 31, is_trustworthy: true, created_at: '2026-02-25T11:00:00Z' },
+  { id: 'demo-6', strategy_type: 'rsi', symbol: 'USDJPY', net_pnl: '-125.40', sharpe_ratio: '0.22', max_drawdown_pct: '9.3', win_rate: '0.38', total_trades: 96, is_trustworthy: false, created_at: '2026-02-27T08:30:00Z' },
+  { id: 'demo-7', strategy_type: 'macd', symbol: 'EURUSD', net_pnl: '547.60', sharpe_ratio: '0.95', max_drawdown_pct: '4.7', win_rate: '0.51', total_trades: 68, is_trustworthy: true, created_at: '2026-03-01T13:20:00Z' },
+  { id: 'demo-8', strategy_type: 'bollinger', symbol: 'AAPL', net_pnl: '1892.10', sharpe_ratio: '1.68', max_drawdown_pct: '3.4', win_rate: '0.59', total_trades: 45, is_trustworthy: true, created_at: '2026-03-05T15:10:00Z' },
+];
+
+const DEMO_DETAIL: Record<string, any> = {
+  'demo-1': {
+    id: 'demo-1', strategy_type: 'sma_crossover', symbol: 'EURUSD', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '1284.50', total_return_pct: 12.85, sharpe_ratio: 1.42, sortino_ratio: 1.98,
+      max_drawdown_pct: 3.8, win_rate: 0.56, profit_factor: 1.72, expectancy: '14.76',
+      total_trades: 87, total_commission: '43.50', fee_drag_pct: 0.4, avg_holding_time_minutes: 240,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 22 + Math.sin(i / 5) * 150).toFixed(2),
+    })),
+  },
+  'demo-2': {
+    id: 'demo-2', strategy_type: 'rsi', symbol: 'AAPL', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '2105.30', total_return_pct: 21.05, sharpe_ratio: 1.85, sortino_ratio: 2.41,
+      max_drawdown_pct: 4.2, win_rate: 0.62, profit_factor: 2.15, expectancy: '38.99',
+      total_trades: 54, total_commission: '27.00', fee_drag_pct: 0.3, avg_holding_time_minutes: 480,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 35 + Math.sin(i / 4) * 200).toFixed(2),
+    })),
+  },
+  'demo-3': {
+    id: 'demo-3', strategy_type: 'bollinger', symbol: 'GBPUSD', is_trustworthy: false,
+    trust_issues: ['Sharpe ratio below 0.5', 'Max drawdown exceeds 7%', 'Win rate below 45%'],
+    metrics: {
+      total_net_pnl: '-432.10', total_return_pct: -4.32, sharpe_ratio: 0.38, sortino_ratio: 0.29,
+      max_drawdown_pct: 7.5, win_rate: 0.41, profit_factor: 0.82, expectancy: '-3.60',
+      total_trades: 120, total_commission: '60.00', fee_drag_pct: 0.6, avg_holding_time_minutes: 180,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 - i * 7.2 + Math.sin(i / 6) * 120).toFixed(2),
+    })),
+  },
+  'demo-4': {
+    id: 'demo-4', strategy_type: 'macd', symbol: 'MSFT', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '876.20', total_return_pct: 8.76, sharpe_ratio: 1.12, sortino_ratio: 1.54,
+      max_drawdown_pct: 5.1, win_rate: 0.53, profit_factor: 1.48, expectancy: '20.86',
+      total_trades: 42, total_commission: '21.00', fee_drag_pct: 0.2, avg_holding_time_minutes: 360,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 14.6 + Math.sin(i / 4) * 100).toFixed(2),
+    })),
+  },
+  'demo-5': {
+    id: 'demo-5', strategy_type: 'sma_crossover', symbol: 'SPY', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '3210.80', total_return_pct: 32.11, sharpe_ratio: 2.05, sortino_ratio: 2.87,
+      max_drawdown_pct: 2.9, win_rate: 0.64, profit_factor: 2.45, expectancy: '103.57',
+      total_trades: 31, total_commission: '15.50', fee_drag_pct: 0.2, avg_holding_time_minutes: 720,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 54 + Math.sin(i / 3) * 180).toFixed(2),
+    })),
+  },
+  'demo-6': {
+    id: 'demo-6', strategy_type: 'rsi', symbol: 'USDJPY', is_trustworthy: false,
+    trust_issues: ['Sharpe ratio below 0.5', 'Max drawdown exceeds 9%'],
+    metrics: {
+      total_net_pnl: '-125.40', total_return_pct: -1.25, sharpe_ratio: 0.22, sortino_ratio: 0.15,
+      max_drawdown_pct: 9.3, win_rate: 0.38, profit_factor: 0.91, expectancy: '-1.31',
+      total_trades: 96, total_commission: '48.00', fee_drag_pct: 0.5, avg_holding_time_minutes: 120,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 - i * 2.1 + Math.sin(i / 7) * 90).toFixed(2),
+    })),
+  },
+  'demo-7': {
+    id: 'demo-7', strategy_type: 'macd', symbol: 'EURUSD', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '547.60', total_return_pct: 5.48, sharpe_ratio: 0.95, sortino_ratio: 1.22,
+      max_drawdown_pct: 4.7, win_rate: 0.51, profit_factor: 1.35, expectancy: '8.05',
+      total_trades: 68, total_commission: '34.00', fee_drag_pct: 0.3, avg_holding_time_minutes: 300,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 9.1 + Math.sin(i / 5) * 80).toFixed(2),
+    })),
+  },
+  'demo-8': {
+    id: 'demo-8', strategy_type: 'bollinger', symbol: 'AAPL', is_trustworthy: true, trust_issues: [],
+    metrics: {
+      total_net_pnl: '1892.10', total_return_pct: 18.92, sharpe_ratio: 1.68, sortino_ratio: 2.15,
+      max_drawdown_pct: 3.4, win_rate: 0.59, profit_factor: 1.95, expectancy: '42.05',
+      total_trades: 45, total_commission: '22.50', fee_drag_pct: 0.2, avg_holding_time_minutes: 540,
+    },
+    equity_curve: Array.from({ length: 60 }, (_, i) => ({
+      t: new Date(2026, 0, 1 + i).toISOString(),
+      eq: (10000 + i * 31.5 + Math.sin(i / 4) * 160).toFixed(2),
+    })),
+  },
+};
+
+const DEMO_DATA_SUMMARY = {
+  total_bars: 64250,
+  datasets: [
+    { symbol: 'EURUSD', interval: '1h', bar_count: 8760, earliest: '2025-01-01T00:00:00Z', latest: '2026-03-09T00:00:00Z' },
+    { symbol: 'EURUSD', interval: '1d', bar_count: 365, earliest: '2025-01-01T00:00:00Z', latest: '2026-03-09T00:00:00Z' },
+    { symbol: 'GBPUSD', interval: '1h', bar_count: 8760, earliest: '2025-01-01T00:00:00Z', latest: '2026-03-09T00:00:00Z' },
+    { symbol: 'GBPUSD', interval: '1d', bar_count: 365, earliest: '2025-01-01T00:00:00Z', latest: '2026-03-09T00:00:00Z' },
+    { symbol: 'USDJPY', interval: '1h', bar_count: 8760, earliest: '2025-01-01T00:00:00Z', latest: '2026-03-09T00:00:00Z' },
+    { symbol: 'AAPL', interval: '1h', bar_count: 6500, earliest: '2025-01-02T14:30:00Z', latest: '2026-03-07T21:00:00Z' },
+    { symbol: 'AAPL', interval: '1d', bar_count: 252, earliest: '2025-01-02T00:00:00Z', latest: '2026-03-07T00:00:00Z' },
+    { symbol: 'MSFT', interval: '1h', bar_count: 6500, earliest: '2025-01-02T14:30:00Z', latest: '2026-03-07T21:00:00Z' },
+    { symbol: 'MSFT', interval: '1d', bar_count: 252, earliest: '2025-01-02T00:00:00Z', latest: '2026-03-07T00:00:00Z' },
+    { symbol: 'SPY', interval: '1h', bar_count: 6500, earliest: '2025-01-02T14:30:00Z', latest: '2026-03-07T21:00:00Z' },
+    { symbol: 'SPY', interval: '1d', bar_count: 252, earliest: '2025-01-02T00:00:00Z', latest: '2026-03-07T00:00:00Z' },
+  ],
+};
+
 type Tab = 'backtests' | 'data' | 'run';
 
 export default function ResearchPage() {
@@ -73,16 +204,21 @@ export default function ResearchPage() {
 // --- Backtests Tab ---
 
 function BacktestsTab({ selectedBt, onSelect }: { selectedBt: string | null; onSelect: (id: string | null) => void }) {
-  const { data: backtests, isLoading } = useQuery({
+  const { data: rawBacktests, isLoading } = useQuery({
     queryKey: ['backtests'],
     queryFn: () => fetchBacktests({ limit: 50 }),
   });
 
-  const { data: detail } = useQuery({
+  const backtests = rawBacktests && rawBacktests.length > 0 ? rawBacktests : DEMO_BACKTESTS;
+  const isDemo = !rawBacktests || rawBacktests.length === 0;
+
+  const { data: apiDetail } = useQuery({
     queryKey: ['backtestDetail', selectedBt],
     queryFn: () => fetchBacktestDetail(selectedBt!),
-    enabled: !!selectedBt,
+    enabled: !!selectedBt && !selectedBt.startsWith('demo-'),
   });
+
+  const detail = selectedBt?.startsWith('demo-') ? DEMO_DETAIL[selectedBt] : apiDetail;
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -381,10 +517,12 @@ function RunBacktestTab() {
 
 function DataTab() {
   const queryClient = useQueryClient();
-  const { data: summary, isLoading } = useQuery({
+  const { data: rawSummary, isLoading } = useQuery({
     queryKey: ['dataSummary'],
     queryFn: fetchDataSummary,
   });
+
+  const summary = rawSummary && rawSummary.total_bars > 0 ? rawSummary : DEMO_DATA_SUMMARY;
 
   const { data: status } = useQuery({
     queryKey: ['collectionStatus'],

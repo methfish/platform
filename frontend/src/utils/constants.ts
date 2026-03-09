@@ -1,28 +1,54 @@
 export const ORDER_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   pending: { bg: 'bg-yellow-500/15', text: 'text-yellow-400' },
+  PENDING: { bg: 'bg-yellow-500/15', text: 'text-yellow-400' },
   open: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
+  APPROVED: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
+  SUBMITTED: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
   partially_filled: { bg: 'bg-indigo-500/15', text: 'text-indigo-400' },
+  PARTIALLY_FILLED: { bg: 'bg-indigo-500/15', text: 'text-indigo-400' },
   filled: { bg: 'bg-green-500/15', text: 'text-green-400' },
+  FILLED: { bg: 'bg-green-500/15', text: 'text-green-400' },
   cancelled: { bg: 'bg-gray-500/15', text: 'text-gray-400' },
+  CANCELLED: { bg: 'bg-gray-500/15', text: 'text-gray-400' },
+  CANCEL_PENDING: { bg: 'bg-yellow-500/15', text: 'text-yellow-400' },
   rejected: { bg: 'bg-red-500/15', text: 'text-red-400' },
+  REJECTED: { bg: 'bg-red-500/15', text: 'text-red-400' },
+  EXCHANGE_REJECTED: { bg: 'bg-red-500/15', text: 'text-red-400' },
+  FAILED: { bg: 'bg-red-500/15', text: 'text-red-400' },
   expired: { bg: 'bg-gray-500/15', text: 'text-gray-500' },
+  EXPIRED: { bg: 'bg-gray-500/15', text: 'text-gray-500' },
 };
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
+  PENDING: 'Pending',
   open: 'Open',
+  APPROVED: 'Approved',
+  SUBMITTED: 'Submitted',
   partially_filled: 'Partial Fill',
+  PARTIALLY_FILLED: 'Partial Fill',
   filled: 'Filled',
+  FILLED: 'Filled',
   cancelled: 'Cancelled',
+  CANCELLED: 'Cancelled',
+  CANCEL_PENDING: 'Cancelling',
   rejected: 'Rejected',
+  REJECTED: 'Rejected',
+  EXCHANGE_REJECTED: 'Exchange Rejected',
+  FAILED: 'Failed',
   expired: 'Expired',
+  EXPIRED: 'Expired',
 };
 
 export const SIDE_COLORS: Record<string, { bg: string; text: string }> = {
   buy: { bg: 'bg-green-500/15', text: 'text-green-400' },
+  BUY: { bg: 'bg-green-500/15', text: 'text-green-400' },
   sell: { bg: 'bg-red-500/15', text: 'text-red-400' },
+  SELL: { bg: 'bg-red-500/15', text: 'text-red-400' },
   long: { bg: 'bg-green-500/15', text: 'text-green-400' },
+  LONG: { bg: 'bg-green-500/15', text: 'text-green-400' },
   short: { bg: 'bg-red-500/15', text: 'text-red-400' },
+  SHORT: { bg: 'bg-red-500/15', text: 'text-red-400' },
 };
 
 export const STRATEGY_STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> = {

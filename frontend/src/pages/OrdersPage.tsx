@@ -1,17 +1,17 @@
 import { useState } from 'react';
-import { ShoppingCart, Filter } from 'lucide-react';
+import { ClipboardList, Filter } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import OrderTable from '../components/orders/OrderTable';
-import OrderForm from '../components/orders/OrderForm';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'open', label: 'Open' },
-  { value: 'partially_filled', label: 'Partial Fill' },
-  { value: 'filled', label: 'Filled' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+  { value: 'PARTIALLY_FILLED', label: 'Partial Fill' },
+  { value: 'FILLED', label: 'Filled' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'FAILED', label: 'Failed' },
 ];
 
 export default function OrdersPage() {
@@ -31,16 +31,13 @@ export default function OrdersPage() {
       {/* Page Title */}
       <div>
         <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
-          <ShoppingCart className="h-6 w-6 text-accent" />
-          Orders
+          <ClipboardList className="h-6 w-6 text-accent" />
+          Order History
         </h1>
-        <p className="text-sm text-gray-500 mt-1">Manage and monitor all trading orders</p>
+        <p className="text-sm text-gray-500 mt-1">Orders placed by strategies — read-only log</p>
       </div>
 
-      {/* Order Form */}
-      <OrderForm />
-
-      {/* Filters */}
+      {/* Filters + Table */}
       <div className="card">
         <div className="flex items-center gap-4 mb-4">
           <Filter className="h-4 w-4 text-gray-500" />

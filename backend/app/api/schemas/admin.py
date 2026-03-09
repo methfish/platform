@@ -51,6 +51,29 @@ class SystemStatusResponse(BaseModel):
     uptime: float = Field(..., description="Uptime in seconds")
 
 
+class SwitchExchangeRequest(BaseModel):
+    """Request to switch the active exchange adapter at runtime."""
+
+    exchange: str = Field(
+        ...,
+        description="Exchange name: 'binance_spot', 'binance_futures', or 'paper'",
+    )
+    confirmation_phrase: str = Field(
+        ...,
+        description="Must be 'I CONFIRM EXCHANGE SWITCH' to proceed",
+    )
+
+
+class SwitchExchangeResponse(BaseModel):
+    """Result of switching the exchange adapter."""
+
+    success: bool
+    exchange_name: str
+    is_paper: bool
+    is_connected: bool
+    message: str
+
+
 class AuditLogResponse(BaseModel):
     """Single audit log entry."""
 

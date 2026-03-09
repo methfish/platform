@@ -162,14 +162,14 @@ class FillHandler:
         if self.position_tracker is not None:
             try:
                 await self.position_tracker.update_on_fill(
+                    session=session,
+                    exchange=order.exchange,
                     symbol=order.symbol,
                     side=order.side,
-                    quantity=fill_quantity,
-                    price=fill_price,
+                    fill_quantity=fill_quantity,
+                    fill_price=fill_price,
                     commission=commission,
-                    exchange=order.exchange,
                     trading_mode=order.trading_mode,
-                    session=session,
                 )
             except Exception:
                 logger.exception(
