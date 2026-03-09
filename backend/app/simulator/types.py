@@ -3,13 +3,14 @@ Simulator types — shared dataclasses, enums, and configuration.
 
 Simplifying assumptions:
   A1. L1 book only: bid/ask derived from OHLCV bars, not a real order book.
-  A2. No market impact: your orders do not move the price.
-  A3. Latency is deterministic, not stochastic.
-  A4. Cancel latency equals order submission latency.
+  A2. Market impact via square-root model (L2) — optional.
+  A3. Latency is stochastic with jitter (L3).
+  A4. Cancel latency configurable independently.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -95,9 +96,35 @@ class SimulatorConfig:
     # Position limits
     max_position_qty: Decimal = Decimal("100000")
 
+    # L0: Balance / margin tracking
+    use_margin_check: bool = False
+    leverage: Decimal = Decimal("50")  # Max leverage (50:1 for forex retail)
+
     # L1: Dynamic spread estimation from bar data
     use_dynamic_spread: bool = False
     dynamic_spread_multiplier: Decimal = Decimal("0.5")  # Fraction of HL range as spread proxy
+
+    # L2: Market impact model (square-root)
+    use_market_impact: bool = False
+    impact_coefficient: Decimal = Decimal("0.1")  # sigma * coeff * sqrt(qty/ADV)
+    avg_daily_volume: Decimal = Decimal("5000000")  # ADV for impact calculation
+
+    # L5: Time-of-day session scaling
+    use_session_scaling: bool = False
+    # Session definitions: (start_hour_utc, end_hour_utc, vol_mult, spread_mult)
+    # Default forex sessions: Asian=low vol/wide spread, London=high vol/tight, NY=high/tight
+    sessions: list = field(default_factory=lambda: [
+        {"name": "ASIAN", "start": 0, "end": 8, "vol_mult": 0.5, "spread_mult": 1.5},
+        {"name": "LONDON", "start": 8, "end": 13, "vol_mult": 1.5, "spread_mult": 0.7},
+        {"name": "NY_OVERLAP", "start": 13, "end": 17, "vol_mult": 1.8, "spread_mult": 0.6},
+        {"name": "NY_LATE", "start": 17, "end": 22, "vol_mult": 1.0, "spread_mult": 1.0},
+        {"name": "OFFHOURS", "start": 22, "end": 24, "vol_mult": 0.3, "spread_mult": 2.0},
+    ])
+
+    # L6: Weekend/holiday gap handling
+    use_gap_detection: bool = False
+    gap_threshold_multiplier: float = 3.0  # Gap if inter-bar time > this × normal duration
+    gap_spread_multiplier: Decimal = Decimal("3.0")  # Widen spread on gap bars
 
     # Misc
     symbol: str = "EURUSD"
@@ -118,6 +145,33 @@ class SimulatorConfig:
     def slippage(self, mid: Decimal) -> Decimal:
         """Additional slippage for market/aggressive orders."""
         return mid * self.slippage_bps / Decimal("10000")
+
+    def market_impact(self, mid: Decimal, qty: Decimal) -> Decimal:
+        """L2: Square-root market impact model.
+
+        Impact = mid × impact_coefficient × sqrt(qty / ADV)
+        Based on: Almgren et al. "Optimal execution of portfolio transactions"
+        """
+        if not self.use_market_impact or self.avg_daily_volume <= 0:
+            return Decimal("0")
+        participation = float(qty / self.avg_daily_volume)
+        impact_bps = float(self.impact_coefficient) * math.sqrt(max(0, participation))
+        return mid * Decimal(str(impact_bps)) / Decimal("10000")
+
+    def buying_power(self, equity: Decimal) -> Decimal:
+        """L0: Maximum notional position allowed given current equity."""
+        return equity * self.leverage
+
+    def session_multipliers(self, hour_utc: int) -> tuple:
+        """L5: Return (vol_mult, spread_mult) for the given hour."""
+        if not self.use_session_scaling:
+            return (1.0, 1.0)
+        for sess in self.sessions:
+            start = sess.get("start", 0)
+            end = sess.get("end", 24)
+            if start <= hour_utc < end:
+                return (sess.get("vol_mult", 1.0), sess.get("spread_mult", 1.0))
+        return (1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +319,9 @@ class InventorySnapshot:
     peak_equity: Decimal = Decimal("0")
     drawdown_pct: float = 0.0
     attribution: PnLAttribution = field(default_factory=PnLAttribution)
+    # L0: Capital tracking
+    position_notional: Decimal = Decimal("0")
+    available_margin: Decimal = Decimal("0")
 
 
 # ---------------------------------------------------------------------------

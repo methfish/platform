@@ -77,12 +77,15 @@ class FillModel:
         half_spread = self._config.half_spread(mid)
         slip = self._config.slippage(mid)
 
+        # L2: Market impact — adds price impact proportional to sqrt(qty/ADV)
+        impact = self._config.market_impact(mid, order.remaining_qty)
+
         if order.side == OrderSide.BUY:
-            # Buy at ask + slippage
-            fill_price = mid + half_spread + slip
+            # Buy at ask + slippage + impact
+            fill_price = mid + half_spread + slip + impact
         else:
-            # Sell at bid - slippage
-            fill_price = mid - half_spread - slip
+            # Sell at bid - slippage - impact
+            fill_price = mid - half_spread - slip - impact
             fill_price = max(fill_price, Decimal("0.00001"))
 
         # P3: Volume guard — cap market fill at 10% of bar volume
@@ -247,11 +250,17 @@ class FillModel:
         if price is None or bar.volume <= 0:
             return Decimal("0")
 
+        # L5: Scale volume by session multiplier
+        volume = bar.volume
+        if self._config.use_session_scaling and bar.timestamp:
+            vol_mult, _ = self._config.session_multipliers(bar.timestamp.hour)
+            volume = volume * Decimal(str(vol_mult))
+
         bar_range = bar.high - bar.low
         if bar_range <= 0:
             # Flat bar — all volume at one price
             if bar.close == price:
-                return bar.volume
+                return volume
             return Decimal("0")
 
         # L9: Volume distribution across bar range
@@ -261,8 +270,8 @@ class FillModel:
         away_frac = Decimal("0.05")        # 5% of volume elsewhere in range
         bucket_width = bar_range * near_close_frac
         if abs(price - bar.close) <= bucket_width:
-            return bar.volume * near_close_frac
+            return volume * near_close_frac
         elif bar.low <= price <= bar.high:
-            return bar.volume * away_frac
+            return volume * away_frac
         else:
             return Decimal("0")

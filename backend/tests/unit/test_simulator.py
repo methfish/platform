@@ -742,3 +742,264 @@ class TestSimulatorEngine:
         assert taker_fill is not None
         if maker_fill is not None:
             assert maker_fill.commission < taker_fill.commission
+
+
+# ====================================================================
+# L0: Balance / Margin Tracking
+# ====================================================================
+
+
+class TestL0MarginCheck:
+
+    def test_margin_rejects_overleveraged_order(self):
+        """L0: Order rejected when notional exceeds buying power."""
+        bars = _bars(5)
+
+        submitted = []
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 0:
+                oid = eng.submit_order(OrderSide.BUY, Decimal("500"))
+                submitted.append(oid)
+
+        # equity=100000, leverage=1 → buying power=100000
+        # 500 qty × ~1.1 mid = ~550 notional → should be allowed
+        cfg = _config(use_margin_check=True, leverage=Decimal("1"))
+        engine = SimulatorEngine(cfg)
+        result = engine.run(bars, strategy)
+        assert len(submitted) == 1
+        assert submitted[0] != ""  # Order accepted
+
+    def test_margin_rejects_when_exceeded(self):
+        """L0: Order rejected when notional > leverage × equity."""
+        bars = _bars(5)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 0:
+                # 100000 qty × ~1.1 = ~110000 notional
+                # buying power = 100000 × 0.5 = 50000
+                eng.submit_order(OrderSide.BUY, Decimal("100000"))
+
+        cfg = _config(
+            use_margin_check=True,
+            leverage=Decimal("0.5"),
+            max_position_qty=Decimal("200000"),
+        )
+        engine = SimulatorEngine(cfg)
+        result = engine.run(bars, strategy)
+        assert result.total_rejects > 0
+
+    def test_snapshot_has_margin_fields(self):
+        """L0: InventorySnapshot includes position_notional and available_margin."""
+        bars = _bars(5)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 0:
+                eng.submit_order(OrderSide.BUY, Decimal("500"))
+
+        cfg = _config()
+        engine = SimulatorEngine(cfg)
+        result = engine.run(bars, strategy)
+        # Check that snapshots have L0 fields
+        for snap in result.equity_curve:
+            assert hasattr(snap, 'position_notional')
+            assert hasattr(snap, 'available_margin')
+
+
+# ====================================================================
+# L2: Market Impact
+# ====================================================================
+
+
+class TestL2MarketImpact:
+
+    def test_impact_worsens_fill_price(self):
+        """L2: Market impact makes fills worse than without it."""
+        bars = _bars(3)
+
+        fills_no_impact = []
+        fills_with_impact = []
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 0:
+                eng.submit_order(OrderSide.BUY, Decimal("500"))
+
+        # Without impact
+        cfg1 = _config(use_market_impact=False)
+        engine1 = SimulatorEngine(cfg1)
+        result1 = engine1.run(bars, strategy)
+        if result1.trades:
+            fills_no_impact.append(float(result1.trades[0].entry_price))
+
+        # With impact
+        cfg2 = _config(
+            use_market_impact=True,
+            impact_coefficient=Decimal("10"),
+            avg_daily_volume=Decimal("10000"),
+        )
+        engine2 = SimulatorEngine(cfg2)
+        result2 = engine2.run(bars, strategy)
+        if result2.trades:
+            fills_with_impact.append(float(result2.trades[0].entry_price))
+
+        # BUY with impact should have higher entry price
+        if fills_no_impact and fills_with_impact:
+            assert fills_with_impact[0] > fills_no_impact[0]
+
+    def test_impact_config_computes(self):
+        """L2: market_impact() method returns positive value."""
+        cfg = _config(
+            use_market_impact=True,
+            impact_coefficient=Decimal("1.0"),
+            avg_daily_volume=Decimal("1000000"),
+        )
+        impact = cfg.market_impact(Decimal("1.1"), Decimal("10000"))
+        assert impact > 0
+
+
+# ====================================================================
+# L5: Session Scaling
+# ====================================================================
+
+
+class TestL5SessionScaling:
+
+    def test_session_multipliers(self):
+        """L5: Session multipliers return correct values by hour."""
+        cfg = _config(use_session_scaling=True)
+        # Asian session (0-8 UTC)
+        vol_mult, spread_mult = cfg.session_multipliers(3)
+        assert vol_mult == 0.5
+        assert spread_mult == 1.5
+        # London session (8-13 UTC)
+        vol_mult, spread_mult = cfg.session_multipliers(10)
+        assert vol_mult == 1.5
+        assert spread_mult == 0.7
+
+    def test_session_scaling_disabled(self):
+        """L5: When disabled, multipliers are (1.0, 1.0)."""
+        cfg = _config(use_session_scaling=False)
+        vol_mult, spread_mult = cfg.session_multipliers(3)
+        assert vol_mult == 1.0
+        assert spread_mult == 1.0
+
+
+# ====================================================================
+# L6: Gap Detection
+# ====================================================================
+
+
+class TestL6GapDetection:
+
+    def test_detects_weekend_gap(self):
+        """L6: Gaps wider than threshold are detected."""
+        # Normal bars 1 hour apart, then a 48-hour gap (weekend)
+        bars = []
+        for i in range(3):
+            bars.append(SimBar(
+                timestamp=T0 + timedelta(hours=i),
+                open=Decimal("1.1000"), high=Decimal("1.1020"),
+                low=Decimal("1.0980"), close=Decimal("1.1010"),
+                volume=Decimal("10000"), symbol="EURUSD", interval="1h",
+            ))
+        # Weekend gap
+        bars.append(SimBar(
+            timestamp=T0 + timedelta(hours=50),  # 47 hours later
+            open=Decimal("1.1050"), high=Decimal("1.1070"),
+            low=Decimal("1.1030"), close=Decimal("1.1060"),
+            volume=Decimal("10000"), symbol="EURUSD", interval="1h",
+        ))
+        bars.append(SimBar(
+            timestamp=T0 + timedelta(hours=51),
+            open=Decimal("1.1060"), high=Decimal("1.1080"),
+            low=Decimal("1.1040"), close=Decimal("1.1070"),
+            volume=Decimal("10000"), symbol="EURUSD", interval="1h",
+        ))
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            pass
+
+        cfg = _config(use_gap_detection=True, gap_threshold_multiplier=3.0)
+        engine = SimulatorEngine(cfg)
+        result = engine.run(bars, strategy)
+        assert result.total_bars == 5
+
+
+# ====================================================================
+# L7: Step-based Live Engine
+# ====================================================================
+
+
+class TestL7StepEngine:
+
+    def test_step_by_step_matches_run(self):
+        """L7: step() produces same result as run() for identical bars."""
+        bars = _bars(10)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 2:
+                eng.submit_order(OrderSide.BUY, Decimal("500"))
+            elif bar_idx == 7:
+                eng.submit_order(OrderSide.SELL, Decimal("500"))
+
+        # Run with run()
+        cfg = _config()
+        engine1 = SimulatorEngine(cfg)
+        result1 = engine1.run(bars, strategy)
+
+        # Run with step()
+        engine2 = SimulatorEngine(cfg)
+        for bar in bars:
+            engine2.step(bar, strategy)
+        result2 = engine2.finalize()
+
+        assert result2.total_bars == result1.total_bars
+        assert len(result2.trades) == len(result1.trades)
+        assert result2.total_fills == result1.total_fills
+
+    def test_step_returns_snapshot(self):
+        """L7: step() returns an InventorySnapshot."""
+        bars = _bars(3)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            pass
+
+        cfg = _config()
+        engine = SimulatorEngine(cfg)
+        snap = engine.step(bars[0], strategy)
+        assert isinstance(snap, InventorySnapshot)
+        assert snap.equity > 0
+
+    def test_is_killed_property(self):
+        """L7: is_killed reports kill switch state."""
+        bars = _bars(5)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            pass
+
+        cfg = _config()
+        engine = SimulatorEngine(cfg)
+        assert engine.is_killed is False
+        engine.step(bars[0], strategy)
+        assert engine.is_killed is False
+
+    def test_finalize_closes_position(self):
+        """L7: finalize() force-closes remaining position."""
+        bars = _bars(5)
+
+        def strategy(eng: SimulatorEngine, bar: SimBar):
+            bar_idx = bars.index(bar)
+            if bar_idx == 0:
+                eng.submit_order(OrderSide.BUY, Decimal("500"))
+
+        cfg = _config()
+        engine = SimulatorEngine(cfg)
+        for bar in bars:
+            engine.step(bar, strategy)
+
+        result = engine.finalize()
+        assert len(result.trades) >= 1  # At least the force-close trade

@@ -131,6 +131,10 @@ class SimulatorEngine:
         # L8: Order deduplication — track client_ids submitted per bar
         self._bar_client_ids: set[str] = set()
 
+        # L6: Gap detection state
+        self._is_gap_bar: bool = False
+        self._bar_duration_seconds: float = 0.0  # Estimated from first two bars
+
         # Strategy state (opaque dict for strategy use)
         self.state: dict[str, Any] = {}
 
@@ -156,6 +160,12 @@ class SimulatorEngine:
         """
         if not bars:
             return SimulatorResult(config=self._config)
+
+        # L6: Estimate bar duration from first two bars
+        if len(bars) >= 2:
+            self._bar_duration_seconds = (
+                bars[1].timestamp - bars[0].timestamp
+            ).total_seconds()
 
         # Enqueue all bars
         for bar in bars:
@@ -197,6 +207,119 @@ class SimulatorEngine:
             final_pnl=self._inventory.realized_pnl,
             events_processed=self._events_processed,
         )
+
+    # ------------------------------------------------------------------
+    # Public: live bar-by-bar processing (L7)
+    # ------------------------------------------------------------------
+
+    def step(
+        self,
+        bar: SimBar,
+        strategy: StrategyCallback,
+    ) -> InventorySnapshot:
+        """
+        L7: Process a single bar — for live bar-by-bar execution.
+
+        Unlike run() which takes all bars upfront, step() processes one
+        bar at a time. Call this repeatedly as new bars arrive from a
+        live data feed.
+
+        Returns the latest InventorySnapshot after processing this bar.
+        """
+        # Estimate bar duration from first two bars
+        if self._total_bars == 1 and self._current_bar is not None:
+            self._bar_duration_seconds = (
+                bar.timestamp - self._current_bar.timestamp
+            ).total_seconds()
+
+        # Push this bar as a market data event
+        self._queue.push(MarketDataEvent(timestamp=bar.timestamp, bar=bar))
+
+        # Process all events up to and including this bar
+        while self._queue:
+            if self._kill_switch.is_active:
+                self._cancel_all_open_orders()
+                # Still process this bar for m2m
+                event = self._queue.pop()
+                self._events_processed += 1
+                if isinstance(event, MarketDataEvent):
+                    b = event.bar
+                    self._current_bar = b
+                    self._total_bars += 1
+                    mid = b.typical
+                    self._current_mid = mid
+                    return self._inventory.mark_to_market(mid, b.timestamp)
+                continue
+
+            event = self._queue.pop()
+            self._events_processed += 1
+            self._dispatch(event, strategy)
+
+        # Return the latest snapshot
+        if self._inventory.equity_curve:
+            return self._inventory.equity_curve[-1]
+        return self._inventory.mark_to_market(
+            self._current_mid, bar.timestamp,
+        )
+
+    async def step_async(
+        self,
+        bar: SimBar,
+        strategy: StrategyCallback,
+    ) -> InventorySnapshot:
+        """
+        L7: Async wrapper around step() for live trading integration.
+
+        Runs step() in a way that doesn't block the event loop.
+        Strategy callbacks can be async-aware by using engine.state
+        to communicate with external async systems.
+        """
+        import asyncio
+        return await asyncio.get_event_loop().run_in_executor(
+            None, self.step, bar, strategy,
+        )
+
+    def finalize(self) -> SimulatorResult:
+        """
+        L7: Finalize a live session — close positions and return result.
+
+        Call this after the last step() to get the final SimulatorResult.
+        Same as the tail of run() but without the event loop.
+        """
+        # Close any remaining position at last bar's mid
+        if self._current_bar and not self._inventory.is_flat:
+            self._force_close_position()
+
+        # Final snapshot
+        if self._current_bar:
+            self._inventory.mark_to_market(
+                self._current_mid, self._current_bar.timestamp,
+            )
+
+        return SimulatorResult(
+            config=self._config,
+            trades=self._inventory.closed_trades,
+            equity_curve=self._inventory.equity_curve,
+            total_bars=self._total_bars,
+            total_fills=self._total_fills,
+            total_orders=self._total_orders,
+            total_cancels=self._total_cancels,
+            total_rejects=self._total_rejects,
+            kill_switch_trigger=self._kill_switch.trigger,
+            final_equity=self._inventory.equity,
+            final_pnl=self._inventory.realized_pnl,
+            events_processed=self._events_processed,
+        )
+
+    @property
+    def is_killed(self) -> bool:
+        """Check if the kill switch has been triggered."""
+        return self._kill_switch.is_active
+
+    @property
+    def current_bar(self) -> Optional[SimBar]:
+        """The most recent bar processed."""
+        return self._current_bar
 
     # ------------------------------------------------------------------
     # Public: strategy API (called from strategy callback)
@@ -249,6 +372,20 @@ class SimulatorEngine:
             )
             self._total_rejects += 1
             return ""
+
+        # L0: Margin / buying power check
+        if self._config.use_margin_check and projected > 0:
+            projected_notional = projected * self._current_mid
+            buying_power = self._config.buying_power(self._inventory.equity)
+            if projected_notional > buying_power:
+                logger.warning(
+                    "Order rejected: projected notional %s exceeds buying power %s "
+                    "(equity=%s, leverage=%s)",
+                    projected_notional, buying_power,
+                    self._inventory.equity, self._config.leverage,
+                )
+                self._total_rejects += 1
+                return ""
 
         order = SimOrder(
             client_id=client_id or f"C-{uuid4().hex[:8]}",
@@ -393,13 +530,36 @@ class SimulatorEngine:
     ) -> None:
         """Process a new bar: update quotes, check fills, call strategy."""
         bar = event.bar
+        prev_bar = self._current_bar
         self._current_bar = bar
         self._total_bars += 1
         self._bar_client_ids.clear()  # L8: reset dedup per bar
+        self._is_gap_bar = False  # L6: reset gap flag
+
+        # L6: Detect weekend/holiday gaps
+        if self._config.use_gap_detection and prev_bar is not None:
+            gap_seconds = (bar.timestamp - prev_bar.timestamp).total_seconds()
+            normal_seconds = self._bar_duration_seconds
+            if normal_seconds > 0 and gap_seconds > normal_seconds * self._config.gap_threshold_multiplier:
+                self._is_gap_bar = True
+                logger.info(
+                    "Gap detected: %s → %s (%.0f hours)",
+                    prev_bar.timestamp, bar.timestamp, gap_seconds / 3600,
+                )
 
         # Derive L1 quotes from bar (L1: dynamic spread when configured)
         mid = bar.typical
         half_spread = self._config.half_spread(mid, bar=bar)
+
+        # L5: Scale spread by session multiplier
+        if self._config.use_session_scaling:
+            _, spread_mult = self._config.session_multipliers(bar.timestamp.hour)
+            half_spread = half_spread * Decimal(str(spread_mult))
+
+        # L6: Widen spread on gap bars
+        if self._is_gap_bar:
+            half_spread = half_spread * self._config.gap_spread_multiplier
+
         self._current_mid = mid
         self._current_bid = mid - half_spread
         self._current_ask = mid + half_spread

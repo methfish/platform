@@ -168,6 +168,11 @@ class InventoryTracker:
                 (self._peak_equity - self._equity) / self._peak_equity * 100
             )
 
+        # L0: Compute position notional and available margin
+        pos_notional = abs(self._net_qty) * mid_price
+        buying_power = self._config.buying_power(self._equity)
+        available_margin = buying_power - pos_notional
+
         snap = InventorySnapshot(
             timestamp=timestamp,
             net_qty=self._net_qty,
@@ -184,6 +189,8 @@ class InventoryTracker:
                 commission_cost=self._total_commission,
                 realized_pnl=self._realized_pnl,
             ),
+            position_notional=pos_notional,
+            available_margin=available_margin,
         )
         self._equity_curve.append(snap)
         return snap
