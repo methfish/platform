@@ -2,32 +2,42 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
-  DollarSign,
-  ShoppingCart,
-  TrendingUp,
+  Database,
+  FlaskConical,
   Loader2,
+  ShieldCheck,
+  ShieldAlert,
+  TrendingUp,
+  Zap,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
-import { fetchOrders } from '../api/orders';
-import { fetchPositions } from '../api/positions';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
+import { fetchResearchDashboard, fetchStrategies } from '../api/research';
 import { fetchRiskStatus } from '../api/risk';
-import { fetchHealth, fetchExchangeStatus } from '../api/admin';
-import { fetchTickers } from '../api/marketData';
-import { formatCurrency, formatNumber, pnlColor, formatTimeAgo, formatUptime } from '../utils/formatters';
-import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, SIDE_COLORS, ASSET_CLASS_COLORS, AssetClass } from '../utils/constants';
+import { fetchHealth } from '../api/admin';
+import { formatCurrency, pnlColor, formatUptime } from '../utils/formatters';
 import StatusIndicator from '../components/common/StatusIndicator';
 
 export default function Dashboard() {
-  const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ['orders', { limit: 10 }],
-    queryFn: () => fetchOrders({ limit: 10 }),
-    refetchInterval: 5000,
+  const { data: dashboard, isLoading } = useQuery({
+    queryKey: ['researchDashboard'],
+    queryFn: fetchResearchDashboard,
+    refetchInterval: 10000,
   });
 
-  const { data: positions, isLoading: positionsLoading } = useQuery({
-    queryKey: ['positions'],
-    queryFn: fetchPositions,
-    refetchInterval: 5000,
+  const { data: strategies } = useQuery({
+    queryKey: ['liveStrategies'],
+    queryFn: fetchStrategies,
+    refetchInterval: 10000,
   });
 
   const { data: risk } = useQuery({
@@ -39,32 +49,25 @@ export default function Dashboard() {
   const { data: health } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
-    refetchInterval: 10000,
+    refetchInterval: 15000,
   });
 
-  const { data: exchanges } = useQuery({
-    queryKey: ['exchangeStatus'],
-    queryFn: fetchExchangeStatus,
-    refetchInterval: 10000,
-  });
+  const activeStrategies = strategies?.filter((s: any) => s.status === 'ACTIVE') ?? [];
+  const totalBacktests = dashboard?.total_backtests ?? 0;
+  const totalBars = dashboard?.data_summary?.total_bars ?? 0;
+  const datasets = dashboard?.data_summary?.datasets ?? [];
 
-  const { data: tickers } = useQuery({
-    queryKey: ['tickers'],
-    queryFn: fetchTickers,
-    refetchInterval: 5000,
-  });
-
-  const totalPnl = (positions?.total_unrealized_pnl ?? 0) + (positions?.total_realized_pnl ?? 0);
-  const openOrdersCount = orders?.orders?.filter((o) =>
-    ['pending', 'open', 'partially_filled'].includes(o.status),
-  ).length ?? 0;
+  const livePnl = dashboard?.live_strategy_pnl ?? {};
+  const totalLivePnl = Object.values(livePnl).reduce((sum: number, v: any) => sum + parseFloat(v || '0'), 0);
 
   return (
     <div className="space-y-6">
-      {/* Page Title */}
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-100">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Platform overview and key metrics</p>
+        <h1 className="text-2xl font-bold text-gray-100">Research Lab</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Quantitative trading research — data, backtests, live strategies
+        </p>
       </div>
 
       {/* Kill Switch Alert */}
@@ -72,70 +75,65 @@ export default function Dashboard() {
         <div className="p-4 bg-red-600/20 border border-red-500/40 rounded-lg flex items-center gap-3 animate-pulse">
           <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
           <p className="text-sm font-semibold text-red-300">
-            Kill switch is active -- all trading is halted
+            Kill switch is active — all trading is halted
           </p>
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Total P&L</span>
-            <div className={`p-1.5 rounded-lg ${totalPnl >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-              <DollarSign className={`h-4 w-4 ${totalPnl >= 0 ? 'text-profit' : 'text-loss'}`} />
-            </div>
-          </div>
-          <p className={`text-xl font-bold font-mono ${pnlColor(totalPnl)}`}>
-            {positionsLoading ? '...' : (totalPnl >= 0 ? '+' : '') + formatCurrency(totalPnl)}
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Open Positions</span>
-            <div className="p-1.5 rounded-lg bg-accent/10">
-              <BarChart3 className="h-4 w-4 text-accent" />
-            </div>
-          </div>
-          <p className="text-xl font-bold text-gray-100">
-            {positionsLoading ? '...' : positions?.positions?.length ?? 0}
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Active Orders</span>
-            <div className="p-1.5 rounded-lg bg-blue-500/10">
-              <ShoppingCart className="h-4 w-4 text-blue-400" />
-            </div>
-          </div>
-          <p className="text-xl font-bold text-gray-100">
-            {ordersLoading ? '...' : openOrdersCount}
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-gray-500 font-medium">Daily Loss</span>
-            <div className={`p-1.5 rounded-lg ${(risk?.daily_loss ?? 0) < 0 ? 'bg-red-500/10' : 'bg-green-500/10'}`}>
-              <TrendingUp className={`h-4 w-4 ${(risk?.daily_loss ?? 0) < 0 ? 'text-loss' : 'text-profit'}`} />
-            </div>
-          </div>
-          <p className={`text-xl font-bold font-mono ${pnlColor(risk?.daily_loss ?? 0)}`}>
-            {risk ? formatCurrency(risk.daily_loss) : '...'}
-          </p>
-          <p className="text-[10px] text-gray-600 mt-1">
-            Limit: {risk ? formatCurrency(risk.daily_loss_limit) : '-'}
-          </p>
-        </div>
+      {/* Top Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <MetricCard
+          label="Data Collected"
+          value={totalBars > 0 ? `${(totalBars / 1000).toFixed(1)}K bars` : 'No data'}
+          sub={`${datasets.length} datasets`}
+          icon={<Database className="h-4 w-4 text-blue-400" />}
+          iconBg="bg-blue-500/10"
+        />
+        <MetricCard
+          label="Backtests Run"
+          value={totalBacktests.toString()}
+          sub={dashboard?.best_sharpe ? `Best: ${parseFloat(dashboard.best_sharpe.sharpe).toFixed(2)} SR` : 'None yet'}
+          icon={<FlaskConical className="h-4 w-4 text-purple-400" />}
+          iconBg="bg-purple-500/10"
+        />
+        <MetricCard
+          label="Live Strategies"
+          value={activeStrategies.length.toString()}
+          sub={`${strategies?.length ?? 0} total`}
+          icon={<Zap className="h-4 w-4 text-yellow-400" />}
+          iconBg="bg-yellow-500/10"
+        />
+        <MetricCard
+          label="Live P&L"
+          value={totalLivePnl !== 0 ? `${totalLivePnl >= 0 ? '+' : ''}${formatCurrency(totalLivePnl)}` : '$0.00'}
+          sub="Paper trading"
+          icon={<TrendingUp className={`h-4 w-4 ${totalLivePnl >= 0 ? 'text-profit' : 'text-loss'}`} />}
+          iconBg={totalLivePnl >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}
+          valueColor={pnlColor(totalLivePnl)}
+        />
+        <MetricCard
+          label="System"
+          value={health?.status === 'healthy' ? 'Healthy' : 'Unknown'}
+          sub={health?.uptime ? formatUptime(health.uptime) : '-'}
+          icon={
+            health?.status === 'healthy'
+              ? <ShieldCheck className="h-4 w-4 text-green-400" />
+              : <ShieldAlert className="h-4 w-4 text-gray-400" />
+          }
+          iconBg={health?.status === 'healthy' ? 'bg-green-500/10' : 'bg-gray-500/10'}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Orders */}
+        {/* Recent Backtests Table */}
         <div className="lg:col-span-2 card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Recent Orders</h3>
-          {ordersLoading ? (
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-200">Recent Backtests</h3>
+            <a href="/research" className="text-[10px] text-accent hover:text-accent-hover">
+              View all →
+            </a>
+          </div>
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 text-accent animate-spin" />
             </div>
@@ -144,45 +142,52 @@ export default function Dashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-surface-border">
+                    <th className="table-header">Strategy</th>
                     <th className="table-header">Symbol</th>
-                    <th className="table-header">Side</th>
-                    <th className="table-header">Qty</th>
-                    <th className="table-header">Price</th>
-                    <th className="table-header">Status</th>
+                    <th className="table-header">Net P&L</th>
+                    <th className="table-header">Sharpe</th>
+                    <th className="table-header">Max DD</th>
+                    <th className="table-header">Trades</th>
+                    <th className="table-header">Trust</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-border/50">
-                  {(orders?.orders ?? []).slice(0, 8).map((order) => {
-                    const sideColors = SIDE_COLORS[order.side];
-                    const statusColors = ORDER_STATUS_COLORS[order.status] ?? ORDER_STATUS_COLORS.pending;
+                  {(dashboard?.recent_backtests ?? []).slice(0, 8).map((bt: any) => {
+                    const pnl = parseFloat(bt.net_pnl);
+                    const sharpe = parseFloat(bt.sharpe_ratio);
+                    const dd = parseFloat(bt.max_drawdown_pct);
                     return (
-                      <tr key={order.id} className="hover:bg-surface-overlay/30">
-                        <td className="table-cell font-medium text-gray-200 text-xs">
-                          {order.symbol}
-                        </td>
-                        <td className="table-cell">
-                          <span className={`badge ${sideColors.bg} ${sideColors.text} text-[10px] uppercase font-bold`}>
-                            {order.side}
+                      <tr key={bt.id} className="hover:bg-surface-overlay/30">
+                        <td className="table-cell text-xs">
+                          <span className="badge bg-purple-500/15 text-purple-300 text-[10px]">
+                            {bt.strategy_type}
                           </span>
                         </td>
-                        <td className="table-cell font-mono text-xs">
-                          {formatNumber(order.quantity, 4)}
+                        <td className="table-cell font-mono text-xs text-gray-300">{bt.symbol}</td>
+                        <td className={`table-cell font-mono text-xs ${pnlColor(pnl)}`}>
+                          {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
                         </td>
-                        <td className="table-cell font-mono text-xs">
-                          {order.price ? formatCurrency(order.price) : 'MKT'}
+                        <td className={`table-cell font-mono text-xs ${sharpe > 1 ? 'text-profit' : sharpe > 0 ? 'text-yellow-400' : 'text-loss'}`}>
+                          {sharpe.toFixed(2)}
                         </td>
+                        <td className="table-cell font-mono text-xs text-loss">
+                          -{dd.toFixed(1)}%
+                        </td>
+                        <td className="table-cell font-mono text-xs text-gray-400">{bt.total_trades}</td>
                         <td className="table-cell">
-                          <span className={`badge ${statusColors.bg} ${statusColors.text} text-[10px]`}>
-                            {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                          </span>
+                          {bt.is_trustworthy ? (
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                          ) : (
+                            <XCircle className="h-3.5 w-3.5 text-yellow-500" />
+                          )}
                         </td>
                       </tr>
                     );
                   })}
-                  {(!orders?.orders || orders.orders.length === 0) && (
+                  {(!dashboard?.recent_backtests || dashboard.recent_backtests.length === 0) && (
                     <tr>
-                      <td colSpan={5} className="table-cell text-center text-gray-600 py-6">
-                        No recent orders
+                      <td colSpan={7} className="table-cell text-center text-gray-600 py-6">
+                        No backtests yet — go to Research to run your first
                       </td>
                     </tr>
                   )}
@@ -192,155 +197,150 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* System Status */}
+        {/* Right Column */}
         <div className="space-y-4">
-          {/* Health */}
+          {/* Data Inventory */}
           <div className="card">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">System Health</h3>
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Status</span>
-                <StatusIndicator
-                  status={health?.status === 'healthy' ? 'green' : 'red'}
-                  label={health?.status ?? 'Unknown'}
-                  pulse={health?.status === 'healthy'}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Uptime</span>
-                <span className="text-xs text-gray-300 font-mono">
-                  {health?.uptime ? formatUptime(health.uptime) : '-'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400">Version</span>
-                <span className="text-xs text-gray-500">{health?.version ?? '-'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Exchange Status */}
-          <div className="card">
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">Exchanges</h3>
-            <div className="space-y-2">
-              {(exchanges ?? []).map((ex) => (
-                <div
-                  key={ex.exchange}
-                  className="flex items-center justify-between py-1"
-                >
-                  <div className="flex items-center gap-2">
-                    <StatusIndicator
-                      status={ex.connected ? 'green' : 'red'}
-                      pulse={ex.connected}
-                    />
-                    <span className="text-xs text-gray-300 capitalize">{ex.exchange}</span>
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">
+              <Database className="h-4 w-4 inline mr-1" />
+              Data Inventory
+            </h3>
+            {datasets.length === 0 ? (
+              <p className="text-xs text-gray-600">No data collected yet</p>
+            ) : (
+              <div className="space-y-2">
+                {datasets.slice(0, 6).map((ds: any) => (
+                  <div key={`${ds.symbol}-${ds.interval}`} className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-gray-300 font-medium">{ds.symbol}</span>
+                      <span className="text-[10px] text-gray-500 ml-1.5">{ds.interval}</span>
+                    </div>
+                    <span className="text-xs font-mono text-gray-400">{(ds.bar_count / 1000).toFixed(1)}K</span>
                   </div>
-                  <span className="text-[10px] text-gray-500 font-mono">
-                    {ex.connected ? `${ex.latency_ms}ms` : 'Disconnected'}
-                  </span>
-                </div>
-              ))}
-              {(!exchanges || exchanges.length === 0) && (
-                <p className="text-xs text-gray-600">No exchange data</p>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Market Tickers by Asset Class */}
+          {/* Live Strategies */}
           <div className="card">
             <h3 className="text-sm font-semibold text-gray-200 mb-3">
               <Activity className="h-4 w-4 inline mr-1" />
-              Markets
+              Live Strategies
             </h3>
-            {(['forex', 'stock', 'crypto'] as AssetClass[]).map((cls) => {
-              const clsTickers = (tickers?.tickers ?? []).filter(
-                (t: any) => (t.asset_class ?? 'crypto') === cls && parseFloat(t.last) > 0
-              ).slice(0, cls === 'crypto' ? 3 : 4);
-              if (clsTickers.length === 0) return null;
-              const c = ASSET_CLASS_COLORS[cls];
-              return (
-                <div key={cls} className="mb-3">
-                  <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>
-                    {cls}
-                  </span>
-                  <div className="mt-1.5 space-y-1.5">
-                    {clsTickers.map((t: any) => (
-                      <div key={`${t.exchange}-${t.symbol}`} className="flex items-center justify-between py-0.5">
-                        <span className="text-xs text-gray-300">{t.symbol}</span>
-                        <div className="text-right">
-                          <span className="text-xs font-mono text-gray-200">
-                            {formatCurrency(parseFloat(t.last))}
-                          </span>
-                          <span className={`ml-2 text-[10px] font-mono ${
-                            (t.change_percent_24h ?? 0) >= 0 ? 'text-profit' : 'text-loss'
-                          }`}>
-                            {(t.change_percent_24h ?? 0) >= 0 ? '+' : ''}{(t.change_percent_24h ?? 0).toFixed(2)}%
-                          </span>
+            {activeStrategies.length === 0 ? (
+              <p className="text-xs text-gray-600">No active strategies</p>
+            ) : (
+              <div className="space-y-2.5">
+                {activeStrategies.map((s: any) => {
+                  const pnl = parseFloat(livePnl[s.name] || '0');
+                  return (
+                    <div key={s.id} className="flex items-center justify-between py-1">
+                      <div className="flex items-center gap-2">
+                        <StatusIndicator status="green" pulse />
+                        <div>
+                          <span className="text-xs text-gray-200">{s.name}</span>
+                          <span className="text-[10px] text-gray-500 block">{s.strategy_type}</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {(!tickers?.tickers || tickers.tickers.length === 0) && (
-              <p className="text-xs text-gray-600">No ticker data</p>
+                      <span className={`text-xs font-mono ${pnlColor(pnl)}`}>
+                        {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
+
+          {/* Risk Limits */}
+          {risk && (
+            <div className="card">
+              <h3 className="text-sm font-semibold text-gray-200 mb-3">Risk Limits</h3>
+              <div className="space-y-3">
+                <RiskBar label="Daily Loss" value={Math.abs(risk.daily_loss)} limit={risk.daily_loss_limit} />
+                <RiskBar label="Open Orders" value={risk.open_orders_count} limit={risk.max_open_orders} />
+                <RiskBar label="Margin" value={risk.margin_usage_percent} limit={risk.margin_limit_percent} suffix="%" />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Risk Summary */}
-      {risk && (
+      {/* Backtest Sharpe Chart */}
+      {dashboard?.recent_backtests && dashboard.recent_backtests.length > 2 && (
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Risk Overview</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {[
-              {
-                label: 'Daily Loss',
-                value: `${formatCurrency(Math.abs(risk.daily_loss))} / ${formatCurrency(risk.daily_loss_limit)}`,
-                pct: risk.daily_loss_limit > 0 ? (Math.abs(risk.daily_loss) / risk.daily_loss_limit) * 100 : 0,
-              },
-              {
-                label: 'Open Orders',
-                value: `${risk.open_orders_count} / ${risk.max_open_orders}`,
-                pct: risk.max_open_orders > 0 ? (risk.open_orders_count / risk.max_open_orders) * 100 : 0,
-              },
-              {
-                label: 'Margin Usage',
-                value: `${risk.margin_usage_percent.toFixed(1)}% / ${risk.margin_limit_percent}%`,
-                pct: risk.margin_limit_percent > 0 ? (risk.margin_usage_percent / risk.margin_limit_percent) * 100 : 0,
-              },
-              {
-                label: 'Daily Volume',
-                value: `${formatCurrency(risk.daily_volume)} / ${formatCurrency(risk.daily_volume_limit)}`,
-                pct: risk.daily_volume_limit > 0 ? (risk.daily_volume / risk.daily_volume_limit) * 100 : 0,
-              },
-              {
-                label: 'Last Check',
-                value: risk.last_check_at ? formatTimeAgo(risk.last_check_at) : 'N/A',
-                pct: 0,
-                noBar: true,
-              },
-            ].map((item) => (
-              <div key={item.label}>
-                <p className="text-[10px] text-gray-500 mb-1">{item.label}</p>
-                <p className="text-xs font-mono text-gray-300 mb-1.5">{item.value}</p>
-                {!('noBar' in item && item.noBar) && (
-                  <div className="h-1 bg-surface rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        item.pct > 90 ? 'bg-red-500' : item.pct > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                      }`}
-                      style={{ width: `${Math.min(item.pct, 100)}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">Backtest Performance</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart
+              data={dashboard.recent_backtests.slice(0, 10).map((bt: any) => ({
+                name: `${bt.strategy_type.slice(0, 4)}_${bt.symbol.slice(0, 3)}`,
+                sharpe: parseFloat(bt.sharpe_ratio),
+                trustworthy: bt.is_trustworthy,
+              }))}
+              margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+            >
+              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#9ca3af' }}
+              />
+              <Bar dataKey="sharpe" name="Sharpe Ratio" radius={[4, 4, 0, 0]}>
+                {dashboard.recent_backtests.slice(0, 10).map((bt: any, idx: number) => (
+                  <Cell
+                    key={idx}
+                    fill={parseFloat(bt.sharpe_ratio) > 1 ? '#22c55e' : parseFloat(bt.sharpe_ratio) > 0 ? '#eab308' : '#ef4444'}
+                    fillOpacity={bt.is_trustworthy ? 1 : 0.4}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="text-[10px] text-gray-600 mt-1 text-center">
+            Faded bars = untrusted (insufficient data or suspicious metrics)
+          </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Sub-Components ---
+
+function MetricCard({ label, value, sub, icon, iconBg, valueColor }: {
+  label: string; value: string; sub?: string; icon: React.ReactNode; iconBg: string; valueColor?: string;
+}) {
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-500 font-medium">{label}</span>
+        <div className={`p-1.5 rounded-lg ${iconBg}`}>{icon}</div>
+      </div>
+      <p className={`text-lg font-bold font-mono ${valueColor || 'text-gray-100'}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function RiskBar({ label, value, limit, suffix = '' }: {
+  label: string; value: number; limit: number; suffix?: string;
+}) {
+  const pct = limit > 0 ? (value / limit) * 100 : 0;
+  return (
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="text-[10px] text-gray-500">{label}</span>
+        <span className="text-[10px] font-mono text-gray-400">
+          {value.toFixed(suffix === '%' ? 1 : 0)}{suffix} / {limit}{suffix}
+        </span>
+      </div>
+      <div className="h-1 bg-surface rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
     </div>
   );
 }

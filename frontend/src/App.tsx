@@ -9,6 +9,7 @@ import StrategiesPage from './pages/StrategiesPage';
 import RiskPage from './pages/RiskPage';
 import AgentsPage from './pages/AgentsPage';
 import AdminPage from './pages/AdminPage';
+import ResearchPage from './pages/ResearchPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated);
@@ -31,6 +32,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="research" element={<ResearchPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="positions" element={<PositionsPage />} />
         <Route path="strategies" element={<StrategiesPage />} />

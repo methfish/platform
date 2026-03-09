@@ -10,14 +10,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
+  FlaskConical,
+  Zap,
 } from 'lucide-react';
 import { useAppStore } from '../../store';
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/', label: 'Research Lab', icon: LayoutDashboard },
+  { path: '/research', label: 'Backtests', icon: FlaskConical },
+  { path: '/strategies', label: 'Strategies', icon: Zap },
   { path: '/orders', label: 'Orders', icon: ShoppingCart },
   { path: '/positions', label: 'Positions', icon: BarChart3 },
-  { path: '/strategies', label: 'Strategies', icon: Brain },
   { path: '/risk', label: 'Risk', icon: ShieldAlert },
   { path: '/agents', label: 'Agents', icon: Bot },
   { path: '/admin', label: 'Admin', icon: Settings },
