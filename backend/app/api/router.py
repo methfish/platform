@@ -23,8 +23,10 @@ from app.api.v1 import (
     orders,
     positions,
     reconciliation,
+    research,
     risk,
     strategies,
+    strategy_engine,
     ws,
 )
 
@@ -79,6 +81,16 @@ api_router.include_router(
 
 api_router.include_router(
     agents.router,
+    prefix="/api/v1",
+)
+
+api_router.include_router(
+    strategy_engine.router,
+    prefix="/api/v1",
+)
+
+api_router.include_router(
+    research.router,
     prefix="/api/v1",
 )
 

@@ -31,6 +31,8 @@ class OrderIntent:
     price: Decimal | None = None
     time_in_force: TimeInForce = TimeInForce.GTC
     strategy_id: str = ""
+    exchange: str = ""  # Target exchange for multi-exchange arb routing
+    cancel_order_ids: list[str] = field(default_factory=list)  # Orders to cancel (MM requote)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

@@ -91,7 +91,10 @@ class PaperExchangeAdapter(ExchangeAdapter):
         return int(datetime.now(timezone.utc).timestamp() * 1000)
 
     async def get_symbols(self) -> list[str]:
-        return ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
+        crypto = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT"]
+        forex = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "EURGBP"]
+        stocks = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "META", "SPY", "QQQ", "BRK.B"]
+        return crypto + forex + stocks
 
     # --- Account ---
 
@@ -332,11 +335,12 @@ class PaperExchangeAdapter(ExchangeAdapter):
         commission: Decimal,
     ) -> None:
         """Update paper balances after a fill."""
-        # Parse symbol into base/quote (simplified: assume USDT pairs)
-        quote = "USDT"
+        # Parse symbol into base/quote
+        # Forex: EURUSD -> base=EUR quote=USD; Stocks: AAPL -> base=AAPL quote=USD
+        quote = "USD"
         base = order.symbol
-        for q in ["USDT", "USDC", "BUSD"]:
-            if order.symbol.endswith(q):
+        for q in ["USDT", "USDC", "BUSD", "USD", "EUR", "GBP", "JPY"]:
+            if order.symbol.endswith(q) and order.symbol != q:
                 base = order.symbol[: -len(q)]
                 quote = q
                 break

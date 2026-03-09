@@ -175,6 +175,26 @@ class EventBus:
 
 
 @dataclass(frozen=True)
+class StrategyStarted(Event):
+    strategy_name: str = ""
+    strategy_type: str = ""
+
+
+@dataclass(frozen=True)
+class StrategyStopped(Event):
+    strategy_name: str = ""
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class StrategyPnLUpdate(Event):
+    strategy_name: str = ""
+    realized_pnl: Decimal = Decimal("0")
+    unrealized_pnl: Decimal = Decimal("0")
+    net_pnl: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True)
 class AgentRunCompleted(Event):
     agent_type: str = ""
     completed: bool = True

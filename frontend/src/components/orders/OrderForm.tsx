@@ -2,16 +2,27 @@ import { useState, FormEvent } from 'react';
 import { Send } from 'lucide-react';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { OrderCreateRequest, OrderSide, OrderType, TimeInForce } from '../../types/order';
-import { EXCHANGES, ORDER_TYPES, ORDER_SIDES, TIME_IN_FORCES } from '../../utils/constants';
+import {
+  ASSET_CLASSES,
+  AssetClass,
+  SYMBOLS_BY_CLASS,
+  EXCHANGE_FOR_CLASS,
+  ASSET_CLASS_COLORS,
+  ORDER_TYPES,
+  ORDER_SIDES,
+  TIME_IN_FORCES,
+} from '../../utils/constants';
 
 export default function OrderForm() {
   const createOrder = useCreateOrder();
 
+  const [assetClass, setAssetClass] = useState<AssetClass>('crypto');
+
   const [form, setForm] = useState({
-    exchange: EXCHANGES[0],
-    symbol: '',
+    exchange: EXCHANGE_FOR_CLASS['crypto'],
+    symbol: SYMBOLS_BY_CLASS['crypto'][0].symbol,
     side: 'buy' as OrderSide,
-    type: 'limit' as OrderType,
+    type: 'market' as OrderType,
     quantity: '',
     price: '',
     stop_price: '',
@@ -20,12 +31,17 @@ export default function OrderForm() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const handleAssetClassChange = (cls: AssetClass) => {
+    setAssetClass(cls);
+    setForm((f) => ({
+      ...f,
+      exchange: EXCHANGE_FOR_CLASS[cls],
+      symbol: SYMBOLS_BY_CLASS[cls][0].symbol,
+    }));
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-
-    if (!form.symbol.trim()) {
-      newErrors.symbol = 'Symbol is required';
-    }
 
     const qty = parseFloat(form.quantity);
     if (!form.quantity || isNaN(qty) || qty <= 0) {
@@ -56,7 +72,7 @@ export default function OrderForm() {
 
     const order: OrderCreateRequest = {
       exchange: form.exchange,
-      symbol: form.symbol.toUpperCase().trim(),
+      symbol: form.symbol,
       side: form.side,
       type: form.type,
       quantity: parseFloat(form.quantity),
@@ -72,7 +88,7 @@ export default function OrderForm() {
 
     createOrder.mutate(order, {
       onSuccess: () => {
-        setForm((f) => ({ ...f, symbol: '', quantity: '', price: '', stop_price: '' }));
+        setForm((f) => ({ ...f, quantity: '', price: '', stop_price: '' }));
       },
     });
   };
@@ -88,38 +104,53 @@ export default function OrderForm() {
     }
   };
 
+  const colors = ASSET_CLASS_COLORS[assetClass];
+  const symbolOptions = SYMBOLS_BY_CLASS[assetClass];
+
   return (
     <form onSubmit={handleSubmit} className="card">
       <h3 className="text-sm font-semibold text-gray-200 mb-4">New Order</h3>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Exchange */}
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Exchange</label>
-          <select
-            value={form.exchange}
-            onChange={(e) => updateField('exchange', e.target.value)}
-            className="select-field text-sm"
-          >
-            {EXCHANGES.map((ex) => (
-              <option key={ex} value={ex}>
-                {ex.charAt(0).toUpperCase() + ex.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Asset Class Selector */}
+      <div className="flex gap-2 mb-4">
+        {ASSET_CLASSES.map((cls) => {
+          const c = ASSET_CLASS_COLORS[cls.value as AssetClass];
+          const active = assetClass === cls.value;
+          return (
+            <button
+              key={cls.value}
+              type="button"
+              onClick={() => handleAssetClassChange(cls.value as AssetClass)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                active
+                  ? `${c.bg} ${c.text} ${c.border}`
+                  : 'bg-surface text-gray-500 border-surface-border hover:text-gray-300'
+              }`}
+            >
+              {cls.label}
+            </button>
+          );
+        })}
+        <span className={`ml-2 self-center text-[10px] px-2 py-0.5 rounded border ${colors.bg} ${colors.text} ${colors.border}`}>
+          {assetClass === 'crypto' ? 'Paper / Binance' : assetClass === 'forex' ? 'Simulated FX' : 'Alpaca Paper'}
+        </span>
+      </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Symbol */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Symbol</label>
-          <input
-            type="text"
+          <select
             value={form.symbol}
             onChange={(e) => updateField('symbol', e.target.value)}
-            placeholder="BTC-USDT"
-            className={`input-field text-sm ${errors.symbol ? 'ring-2 ring-red-500/50' : ''}`}
-          />
-          {errors.symbol && <p className="text-red-400 text-[10px] mt-0.5">{errors.symbol}</p>}
+            className="select-field text-sm"
+          >
+            {symbolOptions.map((s) => (
+              <option key={s.symbol} value={s.symbol}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Side */}
@@ -229,7 +260,10 @@ export default function OrderForm() {
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-[10px] text-gray-600">
+          Exchange: <span className="text-gray-500">{form.exchange}</span>
+        </p>
         <button
           type="submit"
           disabled={createOrder.isPending}
@@ -242,7 +276,9 @@ export default function OrderForm() {
           <Send className="h-4 w-4" />
           {createOrder.isPending
             ? 'Submitting...'
-            : `${form.side === 'buy' ? 'Buy' : 'Sell'} ${form.symbol || 'Order'}`}
+            : `${form.side === 'buy' ? 'Buy' : 'Sell'} ${
+                symbolOptions.find((s) => s.symbol === form.symbol)?.label ?? form.symbol
+              }`}
         </button>
       </div>
     </form>

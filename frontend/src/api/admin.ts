@@ -8,13 +8,9 @@ import {
 } from '../types/risk';
 
 export async function login(username: string, password: string): Promise<{ access_token: string; token_type: string }> {
-  const formData = new URLSearchParams();
-  formData.append('username', username);
-  formData.append('password', password);
   const { data } = await client.post<{ access_token: string; token_type: string }>(
     '/api/v1/auth/login',
-    formData,
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    { username, password },
   );
   return data;
 }
@@ -25,8 +21,8 @@ export async function fetchHealth(): Promise<HealthStatus> {
 }
 
 export async function fetchExchangeStatus(): Promise<ExchangeStatus[]> {
-  const { data } = await client.get<ExchangeStatus[]>('/api/v1/exchanges/status');
-  return data;
+  const { data } = await client.get<{ exchanges: ExchangeStatus[] }>('/api/v1/exchanges/status');
+  return data.exchanges ?? [];
 }
 
 export async function fetchTradingMode(): Promise<TradingModeResponse> {

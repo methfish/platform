@@ -14,7 +14,7 @@ import { fetchRiskStatus } from '../api/risk';
 import { fetchHealth, fetchExchangeStatus } from '../api/admin';
 import { fetchTickers } from '../api/marketData';
 import { formatCurrency, formatNumber, pnlColor, formatTimeAgo, formatUptime } from '../utils/formatters';
-import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, SIDE_COLORS } from '../utils/constants';
+import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, SIDE_COLORS, ASSET_CLASS_COLORS, AssetClass } from '../utils/constants';
 import StatusIndicator from '../components/common/StatusIndicator';
 
 export default function Dashboard() {
@@ -246,34 +246,46 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Market Tickers */}
+          {/* Market Tickers by Asset Class */}
           <div className="card">
             <h3 className="text-sm font-semibold text-gray-200 mb-3">
               <Activity className="h-4 w-4 inline mr-1" />
-              Tickers
+              Markets
             </h3>
-            <div className="space-y-2">
-              {(tickers?.tickers ?? []).slice(0, 6).map((t) => (
-                <div key={`${t.exchange}-${t.symbol}`} className="flex items-center justify-between py-0.5">
-                  <span className="text-xs text-gray-300">{t.symbol}</span>
-                  <div className="text-right">
-                    <span className="text-xs font-mono text-gray-200">
-                      {formatCurrency(t.last)}
-                    </span>
-                    <span
-                      className={`ml-2 text-[10px] font-mono ${
-                        t.change_percent_24h >= 0 ? 'text-profit' : 'text-loss'
-                      }`}
-                    >
-                      {t.change_percent_24h >= 0 ? '+' : ''}{t.change_percent_24h.toFixed(2)}%
-                    </span>
+            {(['forex', 'stock', 'crypto'] as AssetClass[]).map((cls) => {
+              const clsTickers = (tickers?.tickers ?? []).filter(
+                (t: any) => (t.asset_class ?? 'crypto') === cls && parseFloat(t.last) > 0
+              ).slice(0, cls === 'crypto' ? 3 : 4);
+              if (clsTickers.length === 0) return null;
+              const c = ASSET_CLASS_COLORS[cls];
+              return (
+                <div key={cls} className="mb-3">
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>
+                    {cls}
+                  </span>
+                  <div className="mt-1.5 space-y-1.5">
+                    {clsTickers.map((t: any) => (
+                      <div key={`${t.exchange}-${t.symbol}`} className="flex items-center justify-between py-0.5">
+                        <span className="text-xs text-gray-300">{t.symbol}</span>
+                        <div className="text-right">
+                          <span className="text-xs font-mono text-gray-200">
+                            {formatCurrency(parseFloat(t.last))}
+                          </span>
+                          <span className={`ml-2 text-[10px] font-mono ${
+                            (t.change_percent_24h ?? 0) >= 0 ? 'text-profit' : 'text-loss'
+                          }`}>
+                            {(t.change_percent_24h ?? 0) >= 0 ? '+' : ''}{(t.change_percent_24h ?? 0).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-              {(!tickers?.tickers || tickers.tickers.length === 0) && (
-                <p className="text-xs text-gray-600">No ticker data</p>
-              )}
-            </div>
+              );
+            })}
+            {(!tickers?.tickers || tickers.tickers.length === 0) && (
+              <p className="text-xs text-gray-600">No ticker data</p>
+            )}
           </div>
         </div>
       </div>

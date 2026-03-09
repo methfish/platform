@@ -18,8 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.core.enums import ExchangeName, TradingMode
-from app.db.session import close_db, init_db
-from app.dependencies import get_trading_state, set_exchange_adapter
+from app.db.session import close_db, init_db, init_db_async
+from app.market_data.seeder import seed_simulated_tickers
+from app.dependencies import get_trading_state, set_exchange_adapter, set_mm_arb_runner
 from app.exchange.factory import create_exchange_adapter
 from app.observability.logging import setup_logging
 
@@ -54,6 +55,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize database
     init_db()
+    await init_db_async()
     logger.info("Database connection initialized")
 
     # Create exchange adapter (paper by default)
@@ -65,12 +67,39 @@ async def lifespan(app: FastAPI):
     set_exchange_adapter(adapter)
     logger.info(f"Exchange adapter: {adapter.exchange_name} (paper={adapter.is_paper})")
 
+    # Seed simulated market data for forex and stocks
+    await seed_simulated_tickers()
+    logger.info("Simulated forex & stock tickers seeded")
+
+    # Initialize strategy runner (MM/Arb engine)
+    from app.core.events import event_bus
+    from app.oms.service import OrderManagementService
+    from app.risk.engine import RiskEngine
+
+    risk_engine = RiskEngine()
+    oms = OrderManagementService(
+        exchange_adapter=adapter,
+        risk_engine=risk_engine,
+        event_bus=event_bus,
+    )
+
+    from app.strategy.mm_arb_runner import MMArbStrategyRunner
+
+    mm_arb_runner = MMArbStrategyRunner(
+        oms=oms,
+        event_bus=event_bus,
+        adapters={"paper": adapter},
+    )
+    set_mm_arb_runner(mm_arb_runner)
+    logger.info("Strategy engine initialized (MM/Arb runner ready)")
+
     logger.info("Pensy platform startup complete")
 
     yield
 
     # Shutdown
     logger.info("Shutting down Pensy platform...")
+    await mm_arb_runner.stop_all()
     await adapter.disconnect()
     await close_db()
     logger.info("Shutdown complete")

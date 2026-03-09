@@ -7,6 +7,8 @@ from app.models.reconciliation import ReconciliationRun, ReconciliationBreak
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.models.agent import AgentRun, LearnedLesson, SkillDefinition, SkillInvocation
+from app.models.backtest import BacktestRun
+from app.models.market_data import OHLCVBar, TickerSnapshot
 
 __all__ = [
     "Base",
@@ -24,4 +26,7 @@ __all__ = [
     "AgentRun",
     "SkillInvocation",
     "LearnedLesson",
+    "BacktestRun",
+    "OHLCVBar",
+    "TickerSnapshot",
 ]

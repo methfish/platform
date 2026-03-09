@@ -7,7 +7,7 @@ Provides database sessions, services, and application state as dependencies.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +43,20 @@ def get_exchange_adapter() -> ExchangeAdapter:
     if _exchange_adapter is None:
         raise RuntimeError("Exchange adapter not initialized")
     return _exchange_adapter
+
+
+_mm_arb_runner: Any = None
+
+
+def set_mm_arb_runner(runner: Any) -> None:
+    global _mm_arb_runner
+    _mm_arb_runner = runner
+
+
+def get_mm_arb_runner() -> Any:
+    if _mm_arb_runner is None:
+        raise RuntimeError("Strategy runner not initialized")
+    return _mm_arb_runner
 
 
 def is_live_trading_active(

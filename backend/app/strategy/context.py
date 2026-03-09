@@ -24,6 +24,8 @@ class StrategyContext:
 
     def update_ticker(self, ticker: NormalizedTicker) -> None:
         self._tickers[ticker.symbol] = ticker
+        # Also store by exchange:symbol for multi-exchange arb
+        self._tickers[f"{ticker.exchange}:{ticker.symbol}"] = ticker
 
     def update_position(self, symbol: str, position: Position) -> None:
         self._positions[symbol] = position
@@ -48,3 +50,7 @@ class StrategyContext:
 
     def get_position(self, symbol: str) -> Position | None:
         return self._positions.get(symbol)
+
+    def get_ticker_for_exchange(self, exchange: str, symbol: str) -> NormalizedTicker | None:
+        """Get ticker for a specific exchange (used by arb strategies)."""
+        return self._tickers.get(f"{exchange}:{symbol}")

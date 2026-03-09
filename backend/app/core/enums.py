@@ -73,10 +73,18 @@ class PositionSide(str, Enum):
     FLAT = "FLAT"
 
 
+class AssetClass(str, Enum):
+    CRYPTO = "crypto"
+    FOREX = "forex"
+    STOCK = "stock"
+
+
 class ExchangeName(str, Enum):
     PAPER = "paper"
     BINANCE_SPOT = "binance_spot"
     BINANCE_FUTURES = "binance_futures"
+    ALPACA = "alpaca"
+    FOREX_SIM = "forex_sim"
 
 
 class RiskSeverity(str, Enum):
@@ -105,6 +113,12 @@ class StrategyStatus(str, Enum):
     PAUSED = "PAUSED"
     STOPPED = "STOPPED"
     ERROR = "ERROR"
+
+
+class StrategyType(str, Enum):
+    TWAP = "TWAP"
+    MARKET_MAKING = "MARKET_MAKING"
+    ARBITRAGE = "ARBITRAGE"
 
 
 class ReconciliationStatus(str, Enum):
