@@ -8,14 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -e ".[dev]"
-
-# Copy application code
+# Copy everything first so app module is available for install
 COPY . .
+
+# Install Python dependencies (non-editable for production)
+RUN pip install --no-cache-dir "."
 
 # Expose port
 EXPOSE ${PORT:-8000}
