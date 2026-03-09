@@ -1,6 +1,7 @@
 """Alembic environment configuration for async PostgreSQL."""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -13,6 +14,10 @@ from app.models import Base  # noqa: F401
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Override with DATABASE_URL env var if set (for Railway/production)
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 target_metadata = Base.metadata
 
