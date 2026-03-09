@@ -91,10 +91,9 @@ class PaperExchangeAdapter(ExchangeAdapter):
         return int(datetime.now(timezone.utc).timestamp() * 1000)
 
     async def get_symbols(self) -> list[str]:
-        crypto = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT", "AVAXUSDT"]
         forex = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "EURGBP"]
         stocks = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "TSLA", "META", "SPY", "QQQ", "BRK.B"]
-        return crypto + forex + stocks
+        return forex + stocks
 
     # --- Account ---
 
@@ -114,11 +113,11 @@ class PaperExchangeAdapter(ExchangeAdapter):
         # Spot paper trading: positions derived from balances
         positions = []
         for asset, qty in self._book.get_all_balances().items():
-            if asset in ("USDT", "USDC", "BUSD"):
+            if asset in ("USD", "USDT", "USDC", "BUSD"):
                 continue
             if qty > 0:
                 positions.append(ExchangePosition(
-                    symbol=f"{asset}USDT",
+                    symbol=asset,
                     side="LONG",
                     quantity=qty,
                 ))

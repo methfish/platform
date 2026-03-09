@@ -29,6 +29,8 @@ class SkillRegistry:
         self._permissions: dict[AgentType, set[str]] = {
             AgentType.TRADE_DECISION: set(),
             AgentType.FAILURE_ANALYSIS: set(),
+            AgentType.RESEARCH: set(),
+            AgentType.STRATEGY_CODING: set(),
         }
         self._disabled: set[str] = set()
 

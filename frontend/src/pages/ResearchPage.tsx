@@ -226,14 +226,14 @@ function BacktestsTab({ selectedBt, onSelect }: { selectedBt: string | null; onS
 function RunBacktestTab() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
-    strategy_type: 'grid',
-    symbol: 'BTCUSDT',
-    interval: '5m',
-    initial_capital: 2000,
-    cost_model: 'binance_spot',
-    max_position_size: 0.01,
+    strategy_type: 'sma_crossover',
+    symbol: 'EURUSD',
+    interval: '1h',
+    initial_capital: 10000,
+    cost_model: 'forex',
+    max_position_size: 10000,
     stop_loss_pct: 5,
-    params: '{"grid_size_pct": 1.0}',
+    params: '{"fast_period": 10, "slow_period": 30}',
   });
 
   const mutation = useMutation({
@@ -255,6 +255,10 @@ function RunBacktestTab() {
   });
 
   const presets: Record<string, string> = {
+    sma_crossover: '{"fast_period": 10, "slow_period": 30}',
+    rsi: '{"rsi_period": 14, "oversold": 30, "overbought": 70}',
+    bollinger: '{"bb_period": 20, "num_std": 2.0}',
+    macd: '{"fast_ema": 12, "slow_ema": 26, "signal_period": 9}',
     grid: '{"grid_size_pct": 1.0}',
     mean_reversion: '{"sma_period": 20, "entry_std": 2.0}',
     market_making: '{"spread_bps": 10, "inventory_limit": 5}',
@@ -272,6 +276,10 @@ function RunBacktestTab() {
               onChange={(e) => setForm({ ...form, strategy_type: e.target.value, params: presets[e.target.value] || '{}' })}
               className="input-field"
             >
+              <option value="sma_crossover">SMA Crossover</option>
+              <option value="rsi">RSI</option>
+              <option value="bollinger">Bollinger Bands</option>
+              <option value="macd">MACD</option>
               <option value="grid">Grid Trading</option>
               <option value="mean_reversion">Mean Reversion</option>
               <option value="market_making">Market Making</option>
@@ -284,10 +292,10 @@ function RunBacktestTab() {
             </Field>
             <Field label="Interval">
               <select value={form.interval} onChange={(e) => setForm({ ...form, interval: e.target.value })} className="input-field">
-                <option value="1m">1m</option>
+                <option value="1h">1h</option>
+                <option value="1d">1d</option>
                 <option value="5m">5m</option>
                 <option value="15m">15m</option>
-                <option value="1h">1h</option>
               </select>
             </Field>
           </div>
@@ -302,8 +310,10 @@ function RunBacktestTab() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Cost Model">
               <select value={form.cost_model} onChange={(e) => setForm({ ...form, cost_model: e.target.value })} className="input-field">
-                <option value="binance_spot">Binance Spot</option>
-                <option value="conservative">Conservative</option>
+                <option value="forex">Forex Retail</option>
+                <option value="forex_ecn">Forex ECN</option>
+                <option value="stock">Stock Retail</option>
+                <option value="stock_ib">Stock IB</option>
                 <option value="zero">Zero (naive)</option>
               </select>
             </Field>
@@ -383,7 +393,7 @@ function DataTab() {
   });
 
   const collectMutation = useMutation({
-    mutationFn: () => startCollection({ exchange: 'binance', symbols: ['BTC/USDT', 'ETH/USDT'], intervals: ['1m', '5m'], limit: 500 }),
+    mutationFn: () => startCollection({ exchange: 'yfinance', symbols: ['EURUSD', 'GBPUSD', 'USDJPY', 'AAPL', 'MSFT', 'SPY'], intervals: ['1h', '1d'], limit: 500 }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collectionStatus'] }),
   });
 
@@ -399,7 +409,7 @@ function DataTab() {
           className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2 mb-4"
         >
           {isCollecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {isCollecting ? `Collecting... ${status?.progress_pct?.toFixed(0)}%` : 'Collect BTC + ETH Data'}
+          {isCollecting ? `Collecting... ${status?.progress_pct?.toFixed(0)}%` : 'Collect Forex & Stock Data'}
         </button>
         {isCollecting && status && (
           <div className="space-y-2">

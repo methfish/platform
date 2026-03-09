@@ -141,3 +141,15 @@ class SkillToggleRequest(BaseModel):
     """Request body for toggling a skill's enabled state."""
 
     enabled: bool = Field(..., description="Whether the skill should be enabled")
+
+
+class AgentRunRequest(BaseModel):
+    """Request body for triggering an agent pipeline run."""
+
+    agent_type: str = Field(..., description="Agent type to run: RESEARCH, STRATEGY_CODING, TRADE_DECISION, FAILURE_ANALYSIS")
+    symbol: str = Field(default="EURUSD", description="Primary symbol for the context")
+    symbols: list[str] = Field(default_factory=lambda: ["EURUSD", "GBPUSD", "AAPL", "MSFT", "SPY"], description="List of symbols")
+    settings: dict[str, Any] = Field(default_factory=dict, description="Additional settings passed to context")
+    strategy_code: str = Field(default="", description="Existing strategy code (for coding agent)")
+    code_modification_request: str = Field(default="", description="What strategy to create/modify (for coding agent)")
+    generated_strategy_name: str = Field(default="", description="Name for the generated strategy")

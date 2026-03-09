@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.agents import (
     AgentRunListResponse,
+    AgentRunRequest,
     AgentRunResponse,
     LearnedLessonListResponse,
     LearnedLessonResponse,
@@ -282,3 +283,97 @@ async def list_lessons(
         lessons=[LearnedLessonResponse.model_validate(l) for l in lessons],
         total=total,
     )
+
+
+# ---------------------------------------------------------------------------
+# Agent pipeline execution
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/run",
+    summary="Run an agent pipeline",
+)
+async def run_agent(
+    body: AgentRunRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Trigger a full agent pipeline execution."""
+    from app.dependencies import get_agent_registry
+
+    try:
+        registry = get_agent_registry()
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Agent system not initialized")
+
+    agent = registry.get(body.agent_type)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Unknown agent type: {body.agent_type}")
+
+    from app.agents.types import AgentType, SkillContext
+    from app.db.session import async_session_factory
+
+    # Build context
+    ctx = SkillContext(
+        agent_type=AgentType(body.agent_type),
+        symbol=body.symbol,
+        symbols=body.symbols,
+        settings={
+            **body.settings,
+            "session_factory": async_session_factory,
+        },
+        strategy_code=body.strategy_code,
+        code_modification_request=body.code_modification_request,
+        generated_strategy_name=body.generated_strategy_name,
+    )
+
+    # Run the agent pipeline
+    result = await agent.run(ctx, run_all=True)
+
+    # Persist the agent run
+    from app.models.agent import AgentRun
+    agent_run = AgentRun(
+        agent_type=body.agent_type,
+        completed=result.completed,
+        short_circuited=result.short_circuited,
+        short_circuit_reason=result.short_circuit_reason,
+        total_execution_time_ms=result.total_execution_time_ms,
+        skills_run=len(result.results),
+        skills_failed=len(result.failed_skills),
+        skills_skipped=len(result.skipped_skills),
+        result_summary_json={
+            "results": [
+                {
+                    "skill_id": r.skill_id,
+                    "status": r.status.value,
+                    "message": r.message,
+                    "execution_time_ms": r.execution_time_ms,
+                }
+                for r in result.results
+            ],
+        },
+    )
+    session.add(agent_run)
+    await session.flush()
+    await session.refresh(agent_run)
+
+    return {
+        "run_id": str(agent_run.id),
+        "agent_type": body.agent_type,
+        "completed": result.completed,
+        "short_circuited": result.short_circuited,
+        "total_execution_time_ms": result.total_execution_time_ms,
+        "skills_run": len(result.results),
+        "skills_failed": len(result.failed_skills),
+        "results": [
+            {
+                "skill_id": r.skill_id,
+                "status": r.status.value,
+                "message": r.message,
+                "output": r.output,
+                "execution_time_ms": r.execution_time_ms,
+            }
+            for r in result.results
+        ],
+    }

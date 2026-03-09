@@ -59,6 +59,20 @@ def get_mm_arb_runner() -> Any:
     return _mm_arb_runner
 
 
+_agent_registry: dict[str, Any] | None = None
+
+
+def set_agent_registry(registry: dict[str, Any]) -> None:
+    global _agent_registry
+    _agent_registry = registry
+
+
+def get_agent_registry() -> dict[str, Any]:
+    if _agent_registry is None:
+        raise RuntimeError("Agent registry not initialized")
+    return _agent_registry
+
+
 def is_live_trading_active(
     settings: Settings | None = None,
     state: TradingState | None = None,

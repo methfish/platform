@@ -38,9 +38,11 @@ from app.api.schemas.research import (
 )
 from app.auth.jwt import get_current_user
 from app.backtest.costs import (
-    BINANCE_SPOT,
-    BINANCE_SPOT_BNB_DISCOUNT,
     CONSERVATIVE,
+    FOREX_ECN,
+    FOREX_RETAIL,
+    STOCK_IB,
+    STOCK_RETAIL,
     ZERO_COST,
     CostModel,
 )
@@ -59,8 +61,10 @@ _collector: MarketDataCollector | None = None
 _collection_task: asyncio.Task | None = None
 
 COST_MODELS: dict[str, CostModel] = {
-    "binance_spot": BINANCE_SPOT,
-    "binance_bnb": BINANCE_SPOT_BNB_DISCOUNT,
+    "forex": FOREX_RETAIL,
+    "forex_ecn": FOREX_ECN,
+    "stock": STOCK_RETAIL,
+    "stock_ib": STOCK_IB,
     "conservative": CONSERVATIVE,
     "zero": ZERO_COST,
 }
@@ -81,7 +85,7 @@ async def start_collection(
     session: AsyncSession = Depends(get_session),
     _user=Depends(get_current_user),
 ) -> DataCollectionStatus:
-    """Kick off an async data collection job using CCXT."""
+    """Kick off an async data collection job using yfinance."""
     global _collector, _collection_task
 
     if _collector and _collector.status.status == "running":
@@ -98,7 +102,6 @@ async def start_collection(
 
     async def _run_collection():
         try:
-            await _collector.initialize(job.exchange_id)
             async with AsyncSession(session.get_bind()) as coll_session:
                 await _collector.collect(job, coll_session)
         except Exception as exc:
@@ -230,7 +233,7 @@ async def run_backtest(
     ]
 
     # Select cost model
-    cost_model = COST_MODELS.get(body.cost_model, BINANCE_SPOT)
+    cost_model = COST_MODELS.get(body.cost_model, FOREX_RETAIL)
 
     config = BacktestConfig(
         strategy_type=body.strategy_type,

@@ -93,6 +93,66 @@ async def lifespan(app: FastAPI):
     set_mm_arb_runner(mm_arb_runner)
     logger.info("Strategy engine initialized (MM/Arb runner ready)")
 
+    # Initialize Agent System
+    from app.agents.skill_registry import SkillRegistry
+    from app.agents.skill_executor import SkillExecutor
+    from app.db.session import async_session_factory
+
+    skill_registry = SkillRegistry()
+    skill_executor = SkillExecutor(session_factory=async_session_factory)
+
+    from app.agents.types import AgentType
+
+    # Register Research Agent skills
+    from app.agents.research_agent.skills.data_inventory import DataInventorySkill
+    from app.agents.research_agent.skills.data_collection import DataCollectionSkill
+    from app.agents.research_agent.skills.backtest_execution import BacktestExecutionSkill
+    from app.agents.research_agent.skills.result_analysis import ResultAnalysisSkill
+    from app.agents.research_agent.skills.parameter_optimization import ParameterOptimizationSkill
+    from app.agents.research_agent.skills.report_generation import ReportGenerationSkill
+
+    research_skills = [
+        DataInventorySkill(), DataCollectionSkill(), BacktestExecutionSkill(),
+        ResultAnalysisSkill(), ParameterOptimizationSkill(), ReportGenerationSkill(),
+    ]
+    for s in research_skills:
+        skill_registry.register(s, [AgentType.RESEARCH])
+
+    # Register Strategy Coding Agent skills
+    from app.agents.coding_agent.skills.strategy_analysis import StrategyAnalysisSkill
+    from app.agents.coding_agent.skills.code_generation import CodeGenerationSkill
+    from app.agents.coding_agent.skills.code_validation import CodeValidationSkill
+    from app.agents.coding_agent.skills.backtest_verification import BacktestVerificationSkill
+    from app.agents.coding_agent.skills.code_registration import CodeRegistrationSkill
+
+    coding_skills = [
+        StrategyAnalysisSkill(), CodeGenerationSkill(), CodeValidationSkill(),
+        BacktestVerificationSkill(), CodeRegistrationSkill(),
+    ]
+    for s in coding_skills:
+        skill_registry.register(s, [AgentType.STRATEGY_CODING])
+
+    # Create agents
+    from app.agents.research_agent import ResearchAgent
+    from app.agents.coding_agent import StrategyCodingAgent
+
+    research_agent = ResearchAgent(registry=skill_registry, executor=skill_executor)
+    coding_agent = StrategyCodingAgent(registry=skill_registry, executor=skill_executor)
+
+    # Build agent registry
+    from app.dependencies import set_agent_registry
+    agent_reg = {
+        AgentType.RESEARCH.value: research_agent,
+        AgentType.STRATEGY_CODING.value: coding_agent,
+    }
+    set_agent_registry(agent_reg)
+    logger.info("Agent system initialized: %d agents, %d skills", len(agent_reg), len(skill_registry.list_all()))
+
+    # Load generated strategies from DB
+    from app.backtest.strategy_loader import load_strategies_from_db
+    loaded = await load_strategies_from_db(async_session_factory)
+    logger.info("Loaded %d generated strategies from database", loaded)
+
     logger.info("Pensy platform startup complete")
 
     yield
@@ -111,7 +171,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Pensy Order Execution Platform",
-        description="Proprietary order execution platform for crypto trading",
+        description="Proprietary order execution platform for forex & stock trading",
         version="0.1.0",
         lifespan=lifespan,
     )

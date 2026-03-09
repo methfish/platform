@@ -162,3 +162,43 @@ ZERO_COST = CostModel(
     spread_bps=Decimal("0"),
     fill_probability=Decimal("1.0"),
 )
+
+# ---------------------------------------------------------------------------
+# Forex Cost Models
+# ---------------------------------------------------------------------------
+
+FOREX_RETAIL = CostModel(
+    maker_fee_rate=Decimal("0"),
+    taker_fee_rate=Decimal("0"),
+    slippage_bps=Decimal("1"),
+    spread_bps=Decimal("15"),
+    fill_probability=Decimal("0.95"),
+)
+
+FOREX_ECN = CostModel(
+    maker_fee_rate=Decimal("0.00003"),
+    taker_fee_rate=Decimal("0.00003"),
+    slippage_bps=Decimal("1"),
+    spread_bps=Decimal("5"),
+    fill_probability=Decimal("0.98"),
+)
+
+# ---------------------------------------------------------------------------
+# Stock Cost Models
+# ---------------------------------------------------------------------------
+
+STOCK_RETAIL = CostModel(
+    maker_fee_rate=Decimal("0"),
+    taker_fee_rate=Decimal("0"),
+    slippage_bps=Decimal("3"),
+    spread_bps=Decimal("5"),
+    fill_probability=Decimal("0.92"),
+)
+
+STOCK_IB = CostModel(
+    maker_fee_rate=Decimal("0.00005"),
+    taker_fee_rate=Decimal("0.00005"),
+    slippage_bps=Decimal("2"),
+    spread_bps=Decimal("3"),
+    fill_probability=Decimal("0.95"),
+)

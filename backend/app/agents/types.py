@@ -42,6 +42,8 @@ class AgentType(str, Enum):
     """Agent categories."""
     TRADE_DECISION = "TRADE_DECISION"
     FAILURE_ANALYSIS = "FAILURE_ANALYSIS"
+    RESEARCH = "RESEARCH"
+    STRATEGY_CODING = "STRATEGY_CODING"
 
 
 @dataclass
@@ -88,6 +90,17 @@ class SkillContext:
 
     # Settings / config
     settings: dict[str, Any] = field(default_factory=dict)
+
+    # Research context (for Research Agent)
+    backtest_results: list[dict[str, Any]] = field(default_factory=list)
+    sweep_results: list[dict[str, Any]] = field(default_factory=list)
+    collected_data_summary: dict[str, Any] = field(default_factory=dict)
+
+    # Strategy coding context (for Strategy Coding Agent)
+    strategy_code: str = ""
+    code_modification_request: str = ""
+    generated_strategy_name: str = ""
+
     trading_mode: str = "PAPER"
 
     # Timing

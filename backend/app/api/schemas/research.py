@@ -16,13 +16,13 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class DataCollectionRequest(BaseModel):
-    exchange: str = Field("binance", description="CCXT exchange id")
+    exchange: str = Field("yfinance", description="Data source id")
     symbols: list[str] = Field(
-        default=["BTC/USDT", "ETH/USDT"],
-        description="Symbols to collect (CCXT format)",
+        default=["EURUSD", "GBPUSD", "USDJPY", "AAPL", "MSFT", "SPY"],
+        description="Symbols to collect (forex pairs or stock tickers)",
     )
     intervals: list[str] = Field(
-        default=["1m", "5m"],
+        default=["1h", "1d"],
         description="Candle intervals",
     )
     limit: int = Field(500, ge=1, le=1000, description="Candles per request")
@@ -54,23 +54,23 @@ class DataSummaryResponse(BaseModel):
 class BacktestRequest(BaseModel):
     strategy_type: str = Field(
         ...,
-        description="Strategy type: grid, mean_reversion, market_making, breakout",
+        description="Strategy type: grid, mean_reversion, market_making, breakout, sma_crossover, rsi, bollinger, macd",
     )
-    symbol: str = Field("BTCUSDT", description="Trading symbol")
+    symbol: str = Field("EURUSD", description="Trading symbol")
     interval: str = Field("5m", description="Candle interval to backtest on")
     initial_capital: Decimal = Field(
-        Decimal("2000"), ge=0, description="Starting capital in USDT"
+        Decimal("10000"), ge=0, description="Starting capital"
     )
     cost_model: str = Field(
-        "binance_spot",
-        description="Cost model: binance_spot, conservative, zero",
+        "forex",
+        description="Cost model: forex, forex_ecn, stock, stock_ib, conservative, zero",
     )
     strategy_params: dict[str, Any] = Field(
         default_factory=dict,
         description="Strategy-specific parameters",
     )
     max_position_size: Decimal = Field(
-        Decimal("0.01"), description="Max position in base asset"
+        Decimal("10000"), description="Max position size"
     )
     stop_loss_pct: Optional[float] = Field(
         5.0, description="Stop loss % (null to disable)"
@@ -114,14 +114,14 @@ class BacktestListItem(BaseModel):
 
 class ParameterSweepRequest(BaseModel):
     strategy_type: str
-    symbol: str = "BTCUSDT"
+    symbol: str = "EURUSD"
     interval: str = "5m"
-    initial_capital: Decimal = Decimal("2000")
+    initial_capital: Decimal = Decimal("10000")
     param_grid: dict[str, list] = Field(
         ...,
         description="Dict of param_name -> list of values to sweep",
     )
-    max_position_size: Decimal = Decimal("0.01")
+    max_position_size: Decimal = Decimal("10000")
 
 
 class SweepResultItem(BaseModel):

@@ -26,7 +26,7 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
 
-from app.backtest.costs import CostModel, BINANCE_SPOT
+from app.backtest.costs import CostModel, FOREX_RETAIL
 from app.backtest.metrics import MetricsCalculator, StrategyMetrics, Trade
 
 logger = logging.getLogger("pensy.backtest.engine")
@@ -88,12 +88,12 @@ class BacktestConfig:
     """Configuration for a single backtest run."""
 
     strategy_type: str = "grid"
-    symbol: str = "BTCUSDT"
+    symbol: str = "EURUSD"
     interval: str = "1m"
-    initial_capital: Decimal = Decimal("2000")
-    cost_model: CostModel = field(default_factory=lambda: BINANCE_SPOT)
+    initial_capital: Decimal = Decimal("10000")
+    cost_model: CostModel = field(default_factory=lambda: FOREX_RETAIL)
     strategy_params: dict[str, Any] = field(default_factory=dict)
-    max_position_size: Decimal = Decimal("0.01")  # In base asset
+    max_position_size: Decimal = Decimal("10000")
     stop_loss_pct: Optional[float] = 5.0           # % stop loss
     take_profit_pct: Optional[float] = None        # % take profit
     max_trades: int = 10000                         # Safety limit
@@ -286,6 +286,246 @@ class StrategySignalGenerator:
 
         return SignalSide.HOLD, Decimal("0"), ""
 
+    @staticmethod
+    def sma_crossover_signal(
+        bar: Bar,
+        params: dict,
+        state: dict,
+    ) -> tuple[SignalSide, Decimal, str]:
+        """
+        Moving Average Crossover: buy when fast SMA crosses above slow SMA,
+        sell when fast crosses below.
+
+        Params:
+            fast_period: fast SMA lookback (default 10)
+            slow_period: slow SMA lookback (default 30)
+        """
+        fast_period = int(params.get("fast_period", 10))
+        slow_period = int(params.get("slow_period", 30))
+
+        prices = state.setdefault("price_history", [])
+        prices.append(float(bar.close))
+
+        if len(prices) < slow_period:
+            return SignalSide.HOLD, Decimal("0"), "warming up"
+
+        # Trim excess history
+        if len(prices) > slow_period * 3:
+            state["price_history"] = prices[-slow_period * 3:]
+            prices = state["price_history"]
+
+        fast_sma = sum(prices[-fast_period:]) / fast_period
+        slow_sma = sum(prices[-slow_period:]) / slow_period
+
+        fast_above = fast_sma > slow_sma
+        prev_fast_above = state.get("prev_fast_above")
+        state["prev_fast_above"] = fast_above
+
+        if prev_fast_above is None:
+            return SignalSide.HOLD, Decimal("0"), "initialized crossover"
+
+        # Crossover detection
+        if fast_above and not prev_fast_above:
+            return SignalSide.BUY, bar.close, f"fast SMA ({fast_sma:.4f}) crossed above slow ({slow_sma:.4f})"
+
+        if not fast_above and prev_fast_above:
+            return SignalSide.SELL, bar.close, f"fast SMA ({fast_sma:.4f}) crossed below slow ({slow_sma:.4f})"
+
+        return SignalSide.HOLD, Decimal("0"), ""
+
+    @staticmethod
+    def rsi_signal(
+        bar: Bar,
+        params: dict,
+        state: dict,
+    ) -> tuple[SignalSide, Decimal, str]:
+        """
+        RSI Mean Reversion: buy when RSI < oversold, sell when RSI > overbought.
+        Uses Wilder smoothing for average gain/loss.
+
+        Params:
+            rsi_period: RSI lookback (default 14)
+            oversold: buy threshold (default 30)
+            overbought: sell threshold (default 70)
+        """
+        rsi_period = int(params.get("rsi_period", 14))
+        oversold = float(params.get("oversold", 30))
+        overbought = float(params.get("overbought", 70))
+
+        prices = state.setdefault("price_history", [])
+        prices.append(float(bar.close))
+
+        if len(prices) < rsi_period + 1:
+            return SignalSide.HOLD, Decimal("0"), "warming up"
+
+        # Compute price changes
+        avg_gain = state.get("avg_gain")
+        avg_loss = state.get("avg_loss")
+
+        if avg_gain is None:
+            # Initial SMA-based calculation
+            gains = []
+            losses = []
+            for i in range(len(prices) - rsi_period, len(prices)):
+                change = prices[i] - prices[i - 1]
+                if change > 0:
+                    gains.append(change)
+                    losses.append(0.0)
+                else:
+                    gains.append(0.0)
+                    losses.append(abs(change))
+            avg_gain = sum(gains) / rsi_period
+            avg_loss = sum(losses) / rsi_period
+        else:
+            # Wilder smoothing
+            change = prices[-1] - prices[-2]
+            current_gain = max(change, 0.0)
+            current_loss = abs(min(change, 0.0))
+            avg_gain = (avg_gain * (rsi_period - 1) + current_gain) / rsi_period
+            avg_loss = (avg_loss * (rsi_period - 1) + current_loss) / rsi_period
+
+        state["avg_gain"] = avg_gain
+        state["avg_loss"] = avg_loss
+
+        # Trim excess history
+        if len(prices) > rsi_period * 3:
+            state["price_history"] = prices[-rsi_period * 3:]
+
+        if avg_loss == 0:
+            rsi = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi = 100.0 - (100.0 / (1.0 + rs))
+
+        if rsi < oversold:
+            return SignalSide.BUY, bar.close, f"RSI={rsi:.1f} < {oversold}"
+
+        if rsi > overbought:
+            return SignalSide.SELL, bar.close, f"RSI={rsi:.1f} > {overbought}"
+
+        return SignalSide.HOLD, Decimal("0"), f"RSI={rsi:.1f}"
+
+    @staticmethod
+    def bollinger_signal(
+        bar: Bar,
+        params: dict,
+        state: dict,
+    ) -> tuple[SignalSide, Decimal, str]:
+        """
+        Bollinger Bands: buy when price < lower band, sell when price > upper band.
+
+        Params:
+            bb_period: lookback period (default 20)
+            num_std: number of standard deviations (default 2.0)
+        """
+        bb_period = int(params.get("bb_period", 20))
+        num_std = float(params.get("num_std", 2.0))
+
+        prices = state.setdefault("price_history", [])
+        prices.append(float(bar.close))
+
+        if len(prices) < bb_period:
+            return SignalSide.HOLD, Decimal("0"), "warming up"
+
+        # Trim excess history
+        if len(prices) > bb_period * 3:
+            state["price_history"] = prices[-bb_period * 3:]
+            prices = state["price_history"]
+
+        window = prices[-bb_period:]
+        sma = sum(window) / len(window)
+        std = (sum((p - sma) ** 2 for p in window) / len(window)) ** 0.5
+
+        if std == 0:
+            return SignalSide.HOLD, Decimal("0"), "zero volatility"
+
+        upper_band = sma + num_std * std
+        lower_band = sma - num_std * std
+        price = float(bar.close)
+
+        if price < lower_band:
+            return SignalSide.BUY, bar.close, f"price {price:.4f} < lower band {lower_band:.4f}"
+
+        if price > upper_band:
+            return SignalSide.SELL, bar.close, f"price {price:.4f} > upper band {upper_band:.4f}"
+
+        return SignalSide.HOLD, Decimal("0"), ""
+
+    @staticmethod
+    def macd_signal(
+        bar: Bar,
+        params: dict,
+        state: dict,
+    ) -> tuple[SignalSide, Decimal, str]:
+        """
+        MACD Crossover: buy when MACD crosses above signal line,
+        sell when MACD crosses below signal line.
+
+        Params:
+            fast_ema: fast EMA period (default 12)
+            slow_ema: slow EMA period (default 26)
+            signal_period: signal line EMA period (default 9)
+        """
+        fast_ema_period = int(params.get("fast_ema", 12))
+        slow_ema_period = int(params.get("slow_ema", 26))
+        signal_period = int(params.get("signal_period", 9))
+
+        price = float(bar.close)
+
+        # Initialize or update EMAs
+        if "fast_ema" not in state:
+            # Use first price as seed
+            state["fast_ema"] = price
+            state["slow_ema"] = price
+            state["signal_ema"] = 0.0
+            state["bar_count"] = 1
+            state["prev_macd_above_signal"] = None
+            return SignalSide.HOLD, Decimal("0"), "initializing"
+
+        state["bar_count"] = state.get("bar_count", 0) + 1
+
+        # EMA multipliers
+        fast_mult = 2.0 / (fast_ema_period + 1)
+        slow_mult = 2.0 / (slow_ema_period + 1)
+        signal_mult = 2.0 / (signal_period + 1)
+
+        # Update EMAs
+        fast_ema_val = (price - state["fast_ema"]) * fast_mult + state["fast_ema"]
+        slow_ema_val = (price - state["slow_ema"]) * slow_mult + state["slow_ema"]
+        state["fast_ema"] = fast_ema_val
+        state["slow_ema"] = slow_ema_val
+
+        # MACD line
+        macd_line = fast_ema_val - slow_ema_val
+
+        # Need enough bars for slow EMA to be meaningful
+        if state["bar_count"] < slow_ema_period:
+            return SignalSide.HOLD, Decimal("0"), "warming up"
+
+        # Signal line (EMA of MACD)
+        if state["signal_ema"] == 0.0 and state["bar_count"] == slow_ema_period:
+            state["signal_ema"] = macd_line
+        else:
+            state["signal_ema"] = (macd_line - state["signal_ema"]) * signal_mult + state["signal_ema"]
+
+        signal_line = state["signal_ema"]
+
+        macd_above_signal = macd_line > signal_line
+        prev_macd_above = state.get("prev_macd_above_signal")
+        state["prev_macd_above_signal"] = macd_above_signal
+
+        if prev_macd_above is None:
+            return SignalSide.HOLD, Decimal("0"), "initialized MACD"
+
+        # Crossover detection
+        if macd_above_signal and not prev_macd_above:
+            return SignalSide.BUY, bar.close, f"MACD ({macd_line:.6f}) crossed above signal ({signal_line:.6f})"
+
+        if not macd_above_signal and prev_macd_above:
+            return SignalSide.SELL, bar.close, f"MACD ({macd_line:.6f}) crossed below signal ({signal_line:.6f})"
+
+        return SignalSide.HOLD, Decimal("0"), ""
+
 
 # ---------------------------------------------------------------------------
 # Backtest Engine
@@ -296,6 +536,10 @@ SIGNAL_GENERATORS = {
     "mean_reversion": StrategySignalGenerator.mean_reversion_signal,
     "market_making": StrategySignalGenerator.market_making_signal,
     "breakout": StrategySignalGenerator.breakout_signal,
+    "sma_crossover": StrategySignalGenerator.sma_crossover_signal,
+    "rsi": StrategySignalGenerator.rsi_signal,
+    "bollinger": StrategySignalGenerator.bollinger_signal,
+    "macd": StrategySignalGenerator.macd_signal,
 }
 
 
@@ -486,9 +730,9 @@ def run_parameter_sweep(
     strategy_type: str,
     symbol: str,
     param_grid: dict[str, list],
-    initial_capital: Decimal = Decimal("2000"),
-    cost_model: CostModel = BINANCE_SPOT,
-    max_position_size: Decimal = Decimal("0.01"),
+    initial_capital: Decimal = Decimal("10000"),
+    cost_model: CostModel = FOREX_RETAIL,
+    max_position_size: Decimal = Decimal("10000"),
 ) -> list[SweepResult]:
     """
     Sweep over parameter combinations and rank results.

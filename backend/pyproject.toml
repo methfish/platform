@@ -27,7 +27,7 @@ dependencies = [
     "orjson>=3.9.0",
     "prometheus-client>=0.20.0",
     "email-validator>=2.0.0",
-    "ccxt>=4.0.0",
+    "yfinance>=0.2.36",
 ]
 
 [project.optional-dependencies]

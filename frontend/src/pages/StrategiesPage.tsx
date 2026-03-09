@@ -28,22 +28,22 @@ const STRATEGY_TEMPLATES: Record<
   MARKET_MAKING: {
     label: 'Market Making',
     defaultConfig: {
-      symbol: 'BTCUSDT',
+      symbol: 'EURUSD',
       spread_bps: 10,
-      order_quantity: '0.01',
+      order_quantity: '10000',
       num_levels: 2,
-      max_inventory: '1.0',
+      max_inventory: '50000',
       inventory_skew_factor: 0.5,
     },
   },
   ARBITRAGE: {
     label: 'Cross-Exchange Arbitrage',
     defaultConfig: {
-      symbol: 'BTCUSDT',
+      symbol: 'EURUSD',
       exchange_a: 'paper',
       exchange_b: 'paper',
       min_spread_bps: 5,
-      order_quantity: '0.01',
+      order_quantity: '10000',
       max_open_arbs: 3,
     },
   },
@@ -173,7 +173,7 @@ export default function StrategiesPage() {
             Strategy Engine
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Market making &amp; arbitrage strategies
+            Forex &amp; stock trading strategies
           </p>
         </div>
         <button
@@ -195,7 +195,7 @@ export default function StrategiesPage() {
               <input
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder="BTC-MM-1"
+                placeholder="EUR-MM-1"
                 className="input-field w-full"
               />
             </div>

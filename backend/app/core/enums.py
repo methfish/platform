@@ -85,6 +85,7 @@ class ExchangeName(str, Enum):
     BINANCE_FUTURES = "binance_futures"
     ALPACA = "alpaca"
     FOREX_SIM = "forex_sim"
+    YFINANCE = "yfinance"
 
 
 class RiskSeverity(str, Enum):
