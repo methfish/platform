@@ -35,10 +35,7 @@ class PaperOrderBook:
         self._orders: dict[str, PaperOrderState] = {}  # exchange_order_id -> order
         self._prices: dict[str, MarketPrice] = {}  # symbol -> price
         self._balances: dict[str, Decimal] = {
-            "USDT": Decimal("100000"),  # Default paper balance
-            "BTC": Decimal("0"),
-            "ETH": Decimal("0"),
-            "SOL": Decimal("0"),
+            "USD": Decimal("100000"),  # Default paper balance
         }
 
     def add_order(self, order: PaperOrderState) -> None:

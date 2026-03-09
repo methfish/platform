@@ -110,6 +110,8 @@ def _compile_and_extract(source_code: str) -> callable:
     The code runs in a restricted namespace that only exposes
     safe builtins.
     """
+    # SECURITY: __import__ is intentionally excluded. Decimal is provided
+    # directly so generated code can use it without importing.
     safe_builtins = {
         "Decimal": Decimal,
         "float": float,
@@ -129,12 +131,10 @@ def _compile_and_extract(source_code: str) -> callable:
         "True": True,
         "False": False,
         "None": None,
-        "__builtins__": {},
-        "__import__": __import__,  # Needed for 'from decimal import Decimal'
     }
 
     code_obj = compile(source_code, "<generated_strategy>", "exec")
-    namespace: dict = dict(safe_builtins)
+    namespace: dict = {"__builtins__": safe_builtins}
     exec(code_obj, namespace)  # noqa: S102
 
     fn = namespace.get("signal_fn")

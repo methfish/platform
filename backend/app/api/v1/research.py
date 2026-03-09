@@ -21,8 +21,12 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select, desc
+from sqlalchemy import func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Maximum bars loaded into memory for a single backtest/sweep.
+# Prevents OOM on large datasets. 500K 1-min bars ≈ 1 year of forex data.
+MAX_BARS_PER_QUERY = 500_000
 
 from app.api.schemas.research import (
     BacktestListItem,
@@ -209,7 +213,7 @@ async def run_backtest(
         query = query.where(OHLCVBar.open_time >= body.start_date)
     if body.end_date:
         query = query.where(OHLCVBar.open_time <= body.end_date)
-    query = query.order_by(OHLCVBar.open_time)
+    query = query.order_by(OHLCVBar.open_time).limit(MAX_BARS_PER_QUERY)
 
     result = await session.execute(query)
     db_bars = result.scalars().all()
@@ -396,6 +400,7 @@ async def parameter_sweep(
         select(OHLCVBar)
         .where(OHLCVBar.symbol == body.symbol, OHLCVBar.interval == body.interval)
         .order_by(OHLCVBar.open_time)
+        .limit(MAX_BARS_PER_QUERY)
     )
     result = await session.execute(query)
     db_bars = result.scalars().all()

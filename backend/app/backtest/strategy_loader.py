@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import ast
 import logging
-from typing import Any, Callable, Optional
+from decimal import Decimal
+from typing import Any, Callable, Optional, Union
+from uuid import UUID
 
 logger = logging.getLogger("pensy.backtest.strategy_loader")
 
-# Restricted builtins for sandboxed execution
+# Restricted builtins for sandboxed execution.
+# SECURITY: __import__ is intentionally excluded. Decimal is provided
+# directly so generated code can use it without importing.
 SAFE_BUILTINS = {
-    "Decimal": __import__("decimal").Decimal,
+    "Decimal": Decimal,
     "float": float,
     "int": int,
     "str": str,
@@ -126,9 +130,9 @@ def compile_strategy(
         return None
 
 
-def register_strategy(name: str, source_code: str) -> bool:
+def register_strategy_runtime(name: str, source_code: str) -> bool:
     """
-    Compile and register a strategy in SIGNAL_GENERATORS.
+    Compile and register a strategy in SIGNAL_GENERATORS (runtime only, no DB).
 
     Returns True if successful.
     """
@@ -143,7 +147,63 @@ def register_strategy(name: str, source_code: str) -> bool:
     return True
 
 
-async def load_strategies_from_db(session_factory) -> int:
+async def register_strategy(
+    session_factory: Any,
+    name: str,
+    source_code: str,
+    description: Optional[str] = None,
+    default_params: Optional[dict] = None,
+    params_schema: Optional[dict] = None,
+    category: Optional[str] = None,
+    created_by_agent_run_id: Optional[str] = None,
+) -> Optional[UUID]:
+    """
+    Compile, register in SIGNAL_GENERATORS, and persist to DB.
+
+    Returns the DB row ID on success, or None on failure.
+    The ``category`` arg is accepted for caller convenience but not
+    stored (the model has no category column).
+    """
+    from app.backtest.engine import SIGNAL_GENERATORS
+
+    fn = compile_strategy(name, source_code)
+    if fn is None:
+        raise ValueError(f"Strategy '{name}' failed compilation/validation")
+
+    SIGNAL_GENERATORS[name] = fn
+    logger.info("Registered strategy '%s' in SIGNAL_GENERATORS (total: %d)", name, len(SIGNAL_GENERATORS))
+
+    # Persist to DB
+    from sqlalchemy import select
+    from app.models.backtest import GeneratedStrategy
+
+    async with session_factory() as session:
+        # Upsert: deactivate any existing strategy with the same name
+        existing_result = await session.execute(
+            select(GeneratedStrategy).where(GeneratedStrategy.name == name)
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing is not None:
+            existing.is_active = False
+
+        row = GeneratedStrategy(
+            name=name,
+            description=description,
+            source_code=source_code,
+            params_schema=params_schema,
+            default_params=default_params,
+            is_active=True,
+            created_by_agent_run_id=created_by_agent_run_id,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+
+        logger.info("Persisted strategy '%s' to DB (id=%s)", name, row.id)
+        return row.id
+
+
+async def load_strategies_from_db(session_factory: Any) -> int:
     """
     Load all active GeneratedStrategy records from DB and register them.
 
@@ -157,12 +217,12 @@ async def load_strategies_from_db(session_factory) -> int:
 
         async with session_factory() as session:
             result = await session.execute(
-                select(GeneratedStrategy).where(GeneratedStrategy.is_active == True)
+                select(GeneratedStrategy).where(GeneratedStrategy.is_active.is_(True))
             )
             strategies = result.scalars().all()
 
             for strat in strategies:
-                if register_strategy(strat.name, strat.source_code):
+                if register_strategy_runtime(strat.name, strat.source_code):
                     loaded += 1
                     logger.info("Loaded generated strategy from DB: %s", strat.name)
                 else:

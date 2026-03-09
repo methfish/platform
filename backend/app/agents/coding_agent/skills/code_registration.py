@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 def _compile_signal_fn(source_code: str) -> callable:
     """Compile source code and return the signal_fn callable."""
+    # SECURITY: __import__ is intentionally excluded. Decimal is provided
+    # directly so generated code can use it without importing.
     safe_builtins = {
         "Decimal": Decimal,
         "float": float,
@@ -52,12 +54,10 @@ def _compile_signal_fn(source_code: str) -> callable:
         "True": True,
         "False": False,
         "None": None,
-        "__builtins__": {},
-        "__import__": __import__,
     }
 
     code_obj = compile(source_code, "<generated_strategy>", "exec")
-    namespace: dict = dict(safe_builtins)
+    namespace: dict = {"__builtins__": safe_builtins}
     exec(code_obj, namespace)  # noqa: S102
 
     fn = namespace.get("signal_fn")
@@ -250,29 +250,39 @@ class CodeRegistrationSkill(BaseSkill):
         """
         Persist the generated strategy to the database.
 
-        Uses the strategy_loader module if available, falling back
-        to direct model insert.
+        Runtime registration in SIGNAL_GENERATORS is already done by
+        execute(). This method only handles DB persistence.
 
         Returns (persisted: bool, db_id).
         """
         try:
-            from app.backtest.strategy_loader import register_strategy
+            from sqlalchemy import select
+            from app.models.backtest import GeneratedStrategy
 
-            db_id = await register_strategy(
-                session_factory=session_factory,
-                name=strategy_name,
-                source_code=source_code,
-                category=category,
-                default_params=default_params,
-                params_schema=params_schema,
-                description=request_text,
-            )
-            return True, db_id
-        except ImportError:
-            logger.debug(
-                "strategy_loader not available, skipping DB persistence"
-            )
-            return False, None
+            async with session_factory() as session:
+                # Deactivate existing strategy with the same name
+                existing_result = await session.execute(
+                    select(GeneratedStrategy).where(
+                        GeneratedStrategy.name == strategy_name
+                    )
+                )
+                existing = existing_result.scalar_one_or_none()
+                if existing is not None:
+                    existing.is_active = False
+
+                row = GeneratedStrategy(
+                    name=strategy_name,
+                    description=request_text,
+                    source_code=source_code,
+                    params_schema=params_schema,
+                    default_params=default_params,
+                    is_active=True,
+                )
+                session.add(row)
+                await session.commit()
+                await session.refresh(row)
+
+            return True, row.id
         except Exception as exc:
             logger.warning("DB persistence failed: %s", exc)
             return False, None

@@ -160,6 +160,24 @@ class PaperExchangeAdapter(ExchangeAdapter):
         exchange_order_id = f"PAPER-{uuid4().hex[:16].upper()}"
         coid = client_order_id or str(uuid4())
 
+        # Pre-trade balance check
+        check_price = price if price is not None else Decimal("0")
+        if order_type == OrderType.MARKET:
+            market_price = self._book.get_price(symbol)
+            if market_price and market_price.last > 0:
+                check_price = market_price.last
+        if check_price > 0:
+            ok, reason = self._check_balance(symbol, side, quantity, check_price)
+            if not ok:
+                logger.warning("Paper order rejected (insufficient balance): %s", reason)
+                return ExchangeOrderResult(
+                    success=False,
+                    exchange_order_id=exchange_order_id,
+                    client_order_id=coid,
+                    status="REJECTED",
+                    message=reason,
+                )
+
         paper_order = PaperOrderState(
             exchange_order_id=exchange_order_id,
             client_order_id=coid,
@@ -326,6 +344,46 @@ class PaperExchangeAdapter(ExchangeAdapter):
 
     # --- Helpers ---
 
+    @staticmethod
+    def _parse_symbol(symbol: str) -> tuple[str, str]:
+        """Parse symbol into (base, quote). Stocks default to quote=USD."""
+        # Sorted longest-first so "USDT" matches before "USD"
+        for q in ["USDT", "USDC", "BUSD", "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"]:
+            if symbol.endswith(q) and symbol != q and len(symbol) > len(q):
+                return symbol[: -len(q)], q
+        # Stock symbols (AAPL, MSFT, etc.) — quote is USD
+        return symbol, "USD"
+
+    def _check_balance(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: Decimal,
+        price: Decimal,
+        commission_estimate: Decimal = Decimal("0"),
+    ) -> tuple[bool, str]:
+        """Check if account has sufficient balance for the order.
+
+        Returns (ok, reason).
+        """
+        base, quote = self._parse_symbol(symbol)
+        notional = quantity * price
+
+        if side == OrderSide.BUY:
+            required = notional + commission_estimate
+            available = self._book.get_balance(quote)
+            if available < required:
+                return False, (
+                    f"Insufficient {quote} balance: need {required}, have {available}"
+                )
+        else:
+            available = self._book.get_balance(base)
+            if available < quantity:
+                return False, (
+                    f"Insufficient {base} balance: need {quantity}, have {available}"
+                )
+        return True, ""
+
     def _apply_fill_to_balances(
         self,
         order: PaperOrderState,
@@ -334,16 +392,7 @@ class PaperExchangeAdapter(ExchangeAdapter):
         commission: Decimal,
     ) -> None:
         """Update paper balances after a fill."""
-        # Parse symbol into base/quote
-        # Forex: EURUSD -> base=EUR quote=USD; Stocks: AAPL -> base=AAPL quote=USD
-        quote = "USD"
-        base = order.symbol
-        for q in ["USDT", "USDC", "BUSD", "USD", "EUR", "GBP", "JPY"]:
-            if order.symbol.endswith(q) and order.symbol != q:
-                base = order.symbol[: -len(q)]
-                quote = q
-                break
-
+        base, quote = self._parse_symbol(order.symbol)
         notional = fill_qty * fill_price
 
         if order.side == OrderSide.BUY:
