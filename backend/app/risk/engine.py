@@ -125,12 +125,10 @@ class RiskEngine:
                 result.passed = False
                 result.failed_checks.append(response.check_name)
                 logger.warning(
-                    "Risk check FAILED",
-                    extra={
-                        "check": response.check_name,
-                        "message": response.message,
-                        "order_id": ctx.order_id,
-                    },
+                    "Risk check FAILED: %s - %s (order=%s)",
+                    response.check_name,
+                    response.message,
+                    ctx.order_id,
                 )
                 if not run_all:
                     break
@@ -138,12 +136,10 @@ class RiskEngine:
             elif response.result == RiskCheckResult.WARN:
                 result.warned_checks.append(response.check_name)
                 logger.info(
-                    "Risk check WARN",
-                    extra={
-                        "check": response.check_name,
-                        "message": response.message,
-                        "order_id": ctx.order_id,
-                    },
+                    "Risk check WARN: %s - %s (order=%s)",
+                    response.check_name,
+                    response.message,
+                    ctx.order_id,
                 )
 
         return result
