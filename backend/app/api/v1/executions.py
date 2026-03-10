@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, desc
+from sqlalchemy import func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import get_current_user
@@ -110,7 +110,7 @@ async def list_orders(
 
     # Count total
     count_result = await session.execute(
-        select(func.count()).select_from(Order.select(*query.add_columns()))
+        select(func.count()).select_from(query.subquery())
     )
     total = count_result.scalar_one()
 
@@ -209,6 +209,3 @@ async def get_positions(
         for p in positions
     ]
 
-
-# Import for count
-from sqlalchemy import func

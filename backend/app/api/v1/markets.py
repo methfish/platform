@@ -95,7 +95,7 @@ async def list_symbols(
     min_rsi: Optional[float] = Query(None, ge=0, le=100),
     max_rsi: Optional[float] = Query(None, ge=0, le=100),
     min_volume: Optional[Decimal] = Query(None, gt=0),
-    sort_by: str = Query("momentum_score", regex="^(momentum_score|volatility_score|change_24h|price)$"),
+    sort_by: str = Query("momentum_score", pattern="^(momentum_score|volatility_score|change_24h|price)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     current_user: User = Depends(get_current_user),
@@ -252,7 +252,7 @@ async def get_symbol_detail(
 @router.get("/symbols/{symbol}/ohlcv", response_model=list[OHLCVBarResponse])
 async def get_symbol_ohlcv(
     symbol: str,
-    interval: str = Query("1h", regex="^(1m|5m|15m|1h|4h|1d)$"),
+    interval: str = Query("1h", pattern="^(1m|5m|15m|1h|4h|1d)$"),
     limit: int = Query(100, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),

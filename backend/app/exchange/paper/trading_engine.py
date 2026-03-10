@@ -11,7 +11,6 @@ from uuid import UUID
 
 from app.models.order import Order, OrderFill
 from app.models.position import Position
-from app.exchange.models import TickerSnapshot
 
 logger = logging.getLogger(__name__)
 

@@ -124,7 +124,7 @@ class OrderExecutor:
             total_cost = sum(f.quantity * f.price + f.commission for f in fills)
             avg_price = total_cost / total_filled_qty if total_filled_qty > 0 else Decimal("0")
 
-            order.status = OrderStatus.FILLED
+            order.status = OrderStatus.FILLED.value
             order.filled_quantity = total_filled_qty
             order.avg_fill_price = avg_price
             order.filled_at = datetime.now(timezone.utc)
@@ -147,7 +147,7 @@ class OrderExecutor:
             )
         else:
             # LIMIT order pending
-            order.status = OrderStatus.PENDING
+            order.status = OrderStatus.PENDING.value
 
     async def _execute_live_order(
         self,
@@ -156,7 +156,7 @@ class OrderExecutor:
     ) -> None:
         """Execute order against live Binance."""
         if not self.binance_client:
-            order.status = OrderStatus.FAILED
+            order.status = OrderStatus.FAILED.value
             order.reject_reason = "Binance client not configured"
             logger.error("Cannot execute live order: Binance client not available")
             return
@@ -174,7 +174,7 @@ class OrderExecutor:
 
             # Update order with exchange response
             order.exchange_order_id = str(response.get("orderId"))
-            order.status = OrderStatus.FILLED if response.get("status") == "FILLED" else OrderStatus.PENDING
+            order.status = OrderStatus.FILLED.value if response.get("status") == "FILLED" else OrderStatus.PENDING
 
             if response.get("fills"):
                 for fill_data in response["fills"]:
@@ -206,7 +206,7 @@ class OrderExecutor:
             )
 
         except Exception as e:
-            order.status = OrderStatus.FAILED
+            order.status = OrderStatus.FAILED.value
             order.reject_reason = str(e)
             logger.error(f"Failed to place live order {order.client_order_id}: {e}")
 
@@ -236,7 +236,7 @@ class OrderExecutor:
                 return False
 
         if success:
-            order.status = OrderStatus.CANCELLED
+            order.status = OrderStatus.CANCELLED.value
             order.cancelled_at = datetime.now(timezone.utc)
             logger.info(f"Cancelled order: {order.client_order_id}")
 

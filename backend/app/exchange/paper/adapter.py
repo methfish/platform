@@ -292,7 +292,10 @@ class PaperExchangeAdapter(ExchangeAdapter):
         """Update market prices and check for limit order fills."""
         self._book.update_price(symbol, bid, ask, last)
         # Check pending limit orders
-        asyncio.get_event_loop().create_task(self._check_limit_fills(symbol, bid, ask))
+        try:
+            asyncio.get_running_loop().create_task(self._check_limit_fills(symbol, bid, ask))
+        except RuntimeError:
+            pass  # No running event loop (called from sync context)
 
     async def _check_limit_fills(self, symbol: str, bid: Decimal, ask: Decimal) -> None:
         """Check if any limit orders should fill at current prices."""

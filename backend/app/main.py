@@ -295,6 +295,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Register error handlers and request middleware
+    from app.api.middleware import register_middleware
+    register_middleware(app)
+
     # Import and include routers
     from app.api.router import api_router
     app.include_router(api_router)

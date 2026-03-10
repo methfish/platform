@@ -106,7 +106,8 @@ async def start_collection(
 
     async def _run_collection():
         try:
-            async with AsyncSession(session.get_bind()) as coll_session:
+            from app.db.session import async_session_factory
+            async with async_session_factory() as coll_session:
                 await _collector.collect(job, coll_session)
         except Exception as exc:
             logger.exception("Collection job failed: %s", exc)
@@ -530,7 +531,7 @@ async def research_dashboard(
     try:
         from app.dependencies import get_mm_arb_runner
         runner = get_mm_arb_runner()
-        for name, pnl_tracker in runner._pnl_trackers.items():
+        for name, pnl_tracker in runner._strategy_pnl.items():
             live_pnl[name] = str(pnl_tracker.net_pnl)
     except Exception:
         pass

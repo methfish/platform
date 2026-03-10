@@ -157,6 +157,12 @@ class RiskEngine:
         Returns:
             A RiskCheckContext with order fields populated.
         """
+        from app.config import get_settings
+        from app.dependencies import get_trading_state
+
+        settings = get_settings()
+        state = get_trading_state()
+
         return RiskCheckContext(
             order_id=str(order.id),
             client_order_id=order.client_order_id,
@@ -168,4 +174,11 @@ class RiskEngine:
             strategy_id=str(order.strategy_id) if order.strategy_id else None,
             exchange=order.exchange,
             trading_mode=order.trading_mode,
+            kill_switch_active=state.kill_switch_active if state else False,
+            settings={
+                "MAX_ORDER_QUANTITY": settings.MAX_ORDER_QUANTITY,
+                "MAX_ORDER_NOTIONAL": settings.MAX_ORDER_NOTIONAL,
+                "MAX_POSITION_NOTIONAL": settings.MAX_POSITION_NOTIONAL,
+                "MAX_DAILY_LOSS": settings.MAX_DAILY_LOSS,
+            },
         )
