@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Bell, LogOut, Power, User } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../../store';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchRiskStatus } from '../../api/risk';
@@ -21,16 +21,19 @@ export default function Header() {
     refetchInterval: 10000,
   });
 
-  useQuery({
+  const { data: riskData } = useQuery({
     queryKey: ['riskStatusHeader'],
     queryFn: fetchRiskStatus,
     refetchInterval: 5000,
-    select: (data) => {
-      setKillSwitchActive(data.kill_switch_active);
-      setTradingMode(data.trading_mode);
-      return data;
-    },
   });
+
+  // Update store state outside of render cycle
+  useEffect(() => {
+    if (riskData) {
+      setKillSwitchActive(riskData.kill_switch_active);
+      setTradingMode(riskData.trading_mode);
+    }
+  }, [riskData, setKillSwitchActive, setTradingMode]);
 
   const mode = tradingModeData?.mode ?? 'paper';
   const isLive = mode === 'live';

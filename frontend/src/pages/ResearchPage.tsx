@@ -373,20 +373,30 @@ function RunBacktestTab() {
   });
 
   const mutation = useMutation({
-    mutationFn: () =>
-      runBacktest({
+    mutationFn: () => {
+      let params;
+      try {
+        params = JSON.parse(form.params || '{}');
+      } catch {
+        throw new Error('Invalid JSON in strategy parameters');
+      }
+      return runBacktest({
         strategy_type: form.strategy_type,
         symbol: form.symbol,
         interval: form.interval,
         initial_capital: form.initial_capital,
         cost_model: form.cost_model,
-        strategy_params: JSON.parse(form.params || '{}'),
+        strategy_params: params,
         max_position_size: form.max_position_size,
         stop_loss_pct: form.stop_loss_pct || null,
-      }),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['backtests'] });
       queryClient.invalidateQueries({ queryKey: ['researchDashboard'] });
+    },
+    onError: (error: Error) => {
+      console.error('Backtest failed:', error.message);
     },
   });
 
@@ -527,7 +537,7 @@ function DataTab() {
   const { data: status } = useQuery({
     queryKey: ['collectionStatus'],
     queryFn: fetchCollectionStatus,
-    refetchInterval: 2000,
+    refetchInterval: 10000,
   });
 
   const collectMutation = useMutation({
