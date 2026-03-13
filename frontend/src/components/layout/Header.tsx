@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Bell, LogOut, Power, User } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../store';
 import { useAuth } from '../../hooks/useAuth';
 import { fetchRiskStatus } from '../../api/risk';
@@ -9,22 +9,27 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import { toggleKillSwitch } from '../../api/risk';
 
 export default function Header() {
-  const { username } = useAuth();
-  const { killSwitchActive, setKillSwitchActive, setTradingMode, notifications } = useAppStore();
-  const { logout } = useAuth();
+  const { username, logout } = useAuth();
+  // Use individual selectors to prevent unnecessary re-renders
+  const killSwitchActive = useAppStore((s) => s.killSwitchActive);
+  const setKillSwitchActive = useAppStore((s) => s.setKillSwitchActive);
+  const setTradingMode = useAppStore((s) => s.setTradingMode);
+  const notifications = useAppStore((s) => s.notifications);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const { data: tradingModeData } = useQuery({
     queryKey: ['tradingMode'],
     queryFn: fetchTradingMode,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   const { data: riskData } = useQuery({
     queryKey: ['riskStatusHeader'],
     queryFn: fetchRiskStatus,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 
   // Update store state outside of render cycle
@@ -39,7 +44,7 @@ export default function Header() {
   const isLive = mode === 'live';
   const unreadCount = notifications.filter((n) => n.type === 'error' || n.type === 'warning').length;
 
-  const handleKillSwitch = async () => {
+  const handleKillSwitch = useCallback(async () => {
     try {
       const result = await toggleKillSwitch(!killSwitchActive);
       setKillSwitchActive(result.kill_switch_active);
@@ -47,7 +52,7 @@ export default function Header() {
       // Error handled by interceptor
     }
     setShowKillConfirm(false);
-  };
+  }, [killSwitchActive, setKillSwitchActive]);
 
   return (
     <>

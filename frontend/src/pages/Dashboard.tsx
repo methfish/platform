@@ -92,25 +92,29 @@ export default function Dashboard() {
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['researchDashboard'],
     queryFn: fetchResearchDashboard,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   const { data: strategies } = useQuery({
     queryKey: ['liveStrategies'],
     queryFn: fetchStrategies,
-    refetchInterval: 10000,
+    refetchInterval: 30000,
+    staleTime: 15000,
   });
 
   const { data: risk } = useQuery({
     queryKey: ['riskStatus'],
     queryFn: fetchRiskStatus,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 
   const { data: health } = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
-    refetchInterval: 15000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   // Use real data if available, otherwise demo data
@@ -206,29 +210,31 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={DEMO_EQUITY_CURVE} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <defs>
-              <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 10 }} />
-            <YAxis
-              tick={{ fill: '#6b7280', fontSize: 10 }}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
-              domain={['auto', 'auto']}
-            />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: '#9ca3af' }}
-              formatter={(v: number) => [`$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, '']}
-            />
-            <Area type="monotone" dataKey="equity" stroke="#6366f1" strokeWidth={2} fill="url(#equityGrad)" name="Portfolio" />
-            <Line type="monotone" dataKey="benchmark" stroke="#6b7280" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Benchmark" />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div style={{ width: '100%', height: 220, minWidth: 0, overflow: 'hidden' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={DEMO_EQUITY_CURVE} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <defs>
+                <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 10 }} />
+              <YAxis
+                tick={{ fill: '#6b7280', fontSize: 10 }}
+                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: '#9ca3af' }}
+                formatter={(v: number) => [`$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, '']}
+              />
+              <Area type="monotone" dataKey="equity" stroke="#6366f1" strokeWidth={2} fill="url(#equityGrad)" name="Portfolio" />
+              <Line type="monotone" dataKey="benchmark" stroke="#6b7280" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Benchmark" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -383,32 +389,34 @@ export default function Dashboard() {
             <Target className="h-4 w-4 text-purple-400" />
             Backtest Sharpe Ratios
           </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart
-              data={backtests.slice(0, 10).map((bt: any) => ({
-                name: `${bt.strategy_type.slice(0, 4)}_${bt.symbol.slice(0, 3)}`,
-                sharpe: parseFloat(bt.sharpe_ratio),
-                trustworthy: bt.is_trustworthy,
-              }))}
-              margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
-            >
-              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#9ca3af' }}
-              />
-              <Bar dataKey="sharpe" name="Sharpe Ratio" radius={[4, 4, 0, 0]}>
-                {backtests.slice(0, 10).map((bt: any, idx: number) => (
-                  <Cell
-                    key={idx}
-                    fill={parseFloat(bt.sharpe_ratio) > 1 ? '#22c55e' : parseFloat(bt.sharpe_ratio) > 0 ? '#eab308' : '#ef4444'}
-                    fillOpacity={bt.is_trustworthy ? 1 : 0.4}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: 200, minWidth: 0, overflow: 'hidden' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={backtests.slice(0, 10).map((bt: any) => ({
+                  name: `${bt.strategy_type.slice(0, 4)}_${bt.symbol.slice(0, 3)}`,
+                  sharpe: parseFloat(bt.sharpe_ratio),
+                  trustworthy: bt.is_trustworthy,
+                }))}
+                margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+              >
+                <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: '#9ca3af' }}
+                />
+                <Bar dataKey="sharpe" name="Sharpe Ratio" radius={[4, 4, 0, 0]}>
+                  {backtests.slice(0, 10).map((bt: any, idx: number) => (
+                    <Cell
+                      key={idx}
+                      fill={parseFloat(bt.sharpe_ratio) > 1 ? '#22c55e' : parseFloat(bt.sharpe_ratio) > 0 ? '#eab308' : '#ef4444'}
+                      fillOpacity={bt.is_trustworthy ? 1 : 0.4}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
           <p className="text-[10px] text-gray-600 mt-1 text-center">
             Faded bars = untrusted (insufficient data or suspicious metrics)
           </p>
@@ -419,19 +427,21 @@ export default function Dashboard() {
             <BarChart3 className="h-4 w-4 text-blue-400" />
             Strategy x Symbol Sharpe Matrix
           </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={DEMO_STRATEGY_PERFORMANCE} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: '#9ca3af' }}
-              />
-              <Bar dataKey="eurusd" name="EUR/USD" fill="#6366f1" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="gbpusd" name="GBP/USD" fill="#06b6d4" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="usdjpy" name="USD/JPY" fill="#f59e0b" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ width: '100%', height: 200, minWidth: 0, overflow: 'hidden' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={DEMO_STRATEGY_PERFORMANCE} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10 }} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: '#9ca3af' }}
+                />
+                <Bar dataKey="eurusd" name="EUR/USD" fill="#6366f1" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="gbpusd" name="GBP/USD" fill="#06b6d4" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="usdjpy" name="USD/JPY" fill="#f59e0b" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
           <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-gray-500">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-indigo-500" /> EUR/USD</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-cyan-500" /> GBP/USD</span>
